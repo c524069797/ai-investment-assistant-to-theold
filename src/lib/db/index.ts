@@ -1,11 +1,26 @@
 import { sql } from "@vercel/postgres";
 import { hashPassword } from "@/lib/auth";
 
-// Ensure tables exist (called on first request)
 let initialized = false;
 
 export async function ensureTables() {
   if (initialized) return;
+
+  // Check if users table has the username column (new schema)
+  // If not, drop old tables and recreate
+  try {
+    const { rowCount } = await sql`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'users' AND column_name = 'username'
+    `;
+    if (rowCount === 0) {
+      // Old schema exists without username column — drop and recreate
+      await sql`DROP TABLE IF EXISTS watchlist`;
+      await sql`DROP TABLE IF EXISTS users`;
+    }
+  } catch {
+    // Tables don't exist yet, that's fine
+  }
 
   await sql`
     CREATE TABLE IF NOT EXISTS users (
