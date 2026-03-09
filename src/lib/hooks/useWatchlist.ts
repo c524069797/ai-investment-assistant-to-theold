@@ -10,64 +10,69 @@ export interface WatchlistItem {
   type: "stock" | "fund";
 }
 
+function getStorageKey(userId: string): string {
+  return `watchlist-${userId}`;
+}
+
+function readWatchlist(userId: string): WatchlistItem[] {
+  try {
+    const raw = localStorage.getItem(getStorageKey(userId));
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+function writeWatchlist(userId: string, items: WatchlistItem[]) {
+  localStorage.setItem(getStorageKey(userId), JSON.stringify(items));
+}
+
 export function useWatchlist() {
   const { currentUser } = useUser();
   const [items, setItems] = useState<WatchlistItem[]>([]);
-  const [version, setVersion] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   const userId = currentUser?.id;
 
+  // Load from localStorage
   useEffect(() => {
     if (!userId) {
       setItems([]);
       setIsLoading(false);
       return;
     }
+    setItems(readWatchlist(userId));
+    setIsLoading(false);
+  }, [userId]);
 
-    setIsLoading(true);
-    fetch(`/api/watchlist?userId=${encodeURIComponent(userId)}`)
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.success) {
-          setItems(
-            json.data.map((r: { code: string; name: string; market: number; type: string }) => ({
-              code: r.code,
-              name: r.name,
-              market: r.market,
-              type: r.type as "stock" | "fund",
-            })),
-          );
-        }
-      })
-      .catch(() => {
-        setItems([]);
-      })
-      .finally(() => setIsLoading(false));
-  }, [userId, version]);
-
-  // Re-fetch when user switches
+  // Re-sync on user-switched or watchlist-update events
   useEffect(() => {
-    const handler = () => setVersion((v) => v + 1);
+    const handler = () => {
+      if (userId) {
+        setItems(readWatchlist(userId));
+      }
+    };
     window.addEventListener("user-switched", handler);
     window.addEventListener("watchlist-update", handler);
+    window.addEventListener("storage", handler);
     return () => {
       window.removeEventListener("user-switched", handler);
       window.removeEventListener("watchlist-update", handler);
+      window.removeEventListener("storage", handler);
     };
-  }, []);
+  }, [userId]);
 
   const addItem = useCallback(
     (item: WatchlistItem) => {
       if (!userId) return;
-      fetch("/api/watchlist", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, ...item }),
-      }).then(() => {
-        setVersion((v) => v + 1);
-        window.dispatchEvent(new Event("watchlist-update"));
-      });
+      const current = readWatchlist(userId);
+      const exists = current.some((i) => i.code === item.code && i.type === item.type);
+      if (exists) return;
+      const updated = [...current, item];
+      writeWatchlist(userId, updated);
+      setItems(updated);
+      window.dispatchEvent(new Event("watchlist-update"));
     },
     [userId],
   );
@@ -75,13 +80,11 @@ export function useWatchlist() {
   const removeItem = useCallback(
     (code: string, type: "stock" | "fund") => {
       if (!userId) return;
-      fetch(
-        `/api/watchlist?userId=${encodeURIComponent(userId)}&code=${encodeURIComponent(code)}&type=${type}`,
-        { method: "DELETE" },
-      ).then(() => {
-        setVersion((v) => v + 1);
-        window.dispatchEvent(new Event("watchlist-update"));
-      });
+      const current = readWatchlist(userId);
+      const updated = current.filter((i) => !(i.code === code && i.type === type));
+      writeWatchlist(userId, updated);
+      setItems(updated);
+      window.dispatchEvent(new Event("watchlist-update"));
     },
     [userId],
   );

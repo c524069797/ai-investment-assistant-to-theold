@@ -1,22 +1,11 @@
 import { NextResponse } from "next/server";
-import { getAllUsers, createUser } from "@/lib/db";
+
+// Fixed users - no filesystem dependency for Vercel serverless
+const USERS = [
+  { id: "dad", name: "爸爸", avatar: "👨", createdAt: "2025-01-01T00:00:00.000Z" },
+  { id: "mom", name: "妈妈", avatar: "👩", createdAt: "2025-01-01T00:00:00.000Z" },
+];
 
 export async function GET() {
-  const users = getAllUsers();
-  return NextResponse.json({ success: true, data: users });
-}
-
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const { name, avatar } = body;
-    if (!name) {
-      return NextResponse.json({ error: "Missing name" }, { status: 400 });
-    }
-    const user = createUser(name, avatar ?? "👤");
-    return NextResponse.json({ success: true, data: user });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
-  }
+  return NextResponse.json({ success: true, data: USERS });
 }

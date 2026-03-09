@@ -169,7 +169,7 @@ export const investmentAgent = new Agent({
       apiKey: process.env.OPENAI_API_KEY!,
       baseURL: process.env.OPENAI_BASE_URL || "https://ai.muapi.cn/v1",
     });
-    return provider.chat("gpt-5.2");
+    return provider.chat("gpt-4o");
   },
   tools: {
     stockLookup: stockLookupTool,
