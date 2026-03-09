@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
-
-// Fixed users - no filesystem dependency for Vercel serverless
-const USERS = [
-  { id: "dad", name: "爸爸", avatar: "👨", createdAt: "2025-01-01T00:00:00.000Z" },
-  { id: "mom", name: "妈妈", avatar: "👩", createdAt: "2025-01-01T00:00:00.000Z" },
-];
+import { getAllUsers } from "@/lib/db";
 
 export async function GET() {
-  return NextResponse.json({ success: true, data: USERS });
+  try {
+    const users = await getAllUsers();
+    return NextResponse.json({ success: true, data: users });
+  } catch (error) {
+    console.error("[/api/users] Error:", error);
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : "Database error" },
+      { status: 500 },
+    );
+  }
 }
