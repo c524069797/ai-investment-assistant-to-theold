@@ -1,11 +1,14 @@
 "use client";
 
-import { use } from "react";
+import { use, useMemo } from "react";
 import { Typography, Card, Button, Divider, Space } from "antd";
 import { ArrowLeftOutlined, RobotOutlined } from "@ant-design/icons";
 import Link from "next/link";
 import { getLessonById } from "@/lib/constants/education";
+import { getChartsForLesson } from "@/lib/constants/education-charts";
 import Quiz from "@/components/education/Quiz";
+import LessonChart from "@/components/education/LessonChart";
+import type { LessonChart as LessonChartType } from "@/types/education";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -25,13 +28,26 @@ export default function LessonDetailPage({ params }: { params: Promise<{ lessonI
     );
   }
 
-  // Simple markdown-like rendering
+  const charts = useMemo(() => getChartsForLesson(lessonId), [lessonId]);
+
+  const chartMap = useMemo(() => {
+    const map = new Map<string, LessonChartType>();
+    const allCharts = [...charts, ...(lesson.charts ?? [])];
+    for (const chart of allCharts) {
+      map.set(chart.id, chart);
+    }
+    return map;
+  }, [charts, lesson.charts]);
+
+  // Enhanced markdown-like rendering with code blocks and chart support
   const renderContent = (content: string) => {
     const lines = content.split("\n");
     const elements: React.ReactNode[] = [];
     let inTable = false;
     let tableRows: string[][] = [];
     let tableHeaders: string[] = [];
+    let inCodeBlock = false;
+    let codeLines: string[] = [];
 
     const flushTable = () => {
       if (tableHeaders.length > 0) {
@@ -78,8 +94,61 @@ export default function LessonDetailPage({ params }: { params: Promise<{ lessonI
       inTable = false;
     };
 
+    const flushCodeBlock = () => {
+      elements.push(
+        <pre
+          key={`code-${elements.length}`}
+          style={{
+            background: "#1e1e2e",
+            color: "#cdd6f4",
+            padding: "16px 20px",
+            borderRadius: 8,
+            fontSize: 14,
+            lineHeight: 1.6,
+            overflowX: "auto",
+            margin: "12px 0",
+            fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
+          }}
+        >
+          {codeLines.join("\n")}
+        </pre>,
+      );
+      codeLines = [];
+      inCodeBlock = false;
+    };
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
+
+      // Code block handling
+      if (line.trimStart().startsWith("```")) {
+        if (inCodeBlock) {
+          flushCodeBlock();
+        } else {
+          if (inTable) flushTable();
+          inCodeBlock = true;
+        }
+        continue;
+      }
+
+      if (inCodeBlock) {
+        codeLines.push(line);
+        continue;
+      }
+
+      // Chart marker: {{chart:chartId}}
+      const chartMatch = line.trim().match(/^\{\{chart:(.+?)\}\}$/);
+      if (chartMatch) {
+        if (inTable) flushTable();
+        const chartId = chartMatch[1];
+        const chart = chartMap.get(chartId);
+        if (chart) {
+          elements.push(
+            <LessonChart key={`chart-${chartId}`} title={chart.title} option={chart.option} />,
+          );
+        }
+        continue;
+      }
 
       // Table detection
       if (line.startsWith("|") && line.endsWith("|")) {
@@ -159,6 +228,7 @@ export default function LessonDetailPage({ params }: { params: Promise<{ lessonI
       }
     }
 
+    if (inCodeBlock) flushCodeBlock();
     if (inTable) flushTable();
 
     return elements;
@@ -197,7 +267,7 @@ export default function LessonDetailPage({ params }: { params: Promise<{ lessonI
         <RobotOutlined style={{ fontSize: 40, color: "#1677ff", marginBottom: 8 }} />
         <Title level={4}>还有疑问？问问 AI 老师</Title>
         <Text style={{ fontSize: 16, color: "#666", display: "block", marginBottom: 16 }}>
-          关于"{lesson.title}"的任何问题，小智都可以帮您解答
+          关于「{lesson.title}」的任何问题，小智都可以帮您解答
         </Text>
         <Link href="/chat">
           <Button type="primary" size="large" icon={<RobotOutlined />}>

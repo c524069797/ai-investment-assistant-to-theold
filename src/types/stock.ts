@@ -38,6 +38,10 @@ export interface StockSearchResult {
   name: string;
   market: number;
   type: string;
+  price?: number;
+  change?: number;
+  changePercent?: number;
+  amount?: number;
 }
 
 /** 大盘指数 */
@@ -49,6 +53,22 @@ export interface MarketIndex {
   changePercent: number;
   volume: number;
   amount: number;
+}
+
+/** 股票排行项 (来自 clist 接口) */
+export interface StockRankingItem {
+  code: string;
+  name: string;
+  market: number;
+  price: number;
+  changePercent: number;
+  volume: number;
+  amount: number;
+  turnoverRate: number;
+  industry: string;
+  pe: number;
+  pb: number;
+  totalMarketCap: number;
 }
 
 /** K线周期 */

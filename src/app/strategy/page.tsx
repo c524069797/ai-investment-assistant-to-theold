@@ -1,16 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Typography, Card, Row, Col, Segmented, Space, Input, Button, Spin, Alert, Descriptions, Tag, Empty } from "antd";
+import { Typography, Card, Row, Col, Segmented, Space, Input, Button, Spin, Alert, Descriptions, Tag, Empty, Divider } from "antd";
 import {
   SafetyCertificateOutlined,
   ThunderboltOutlined,
   SearchOutlined,
   ArrowRightOutlined,
+  FireOutlined,
 } from "@ant-design/icons";
 import Link from "next/link";
 import useSWR from "swr";
-import { getPriceColor, formatPercent } from "@/styles/stock-colors";
+import { getPriceColor, formatPercent, formatAmount } from "@/styles/stock-colors";
 import type { StrategyMode } from "@/lib/constants/market";
 
 const { Title, Text, Paragraph } = Typography;
@@ -27,7 +28,6 @@ export default function StrategyPage() {
   const [mode, setMode] = useState<StrategyMode>("conservative");
   const [stockCode, setStockCode] = useState("");
   const [searchCode, setSearchCode] = useState("");
-  const [hotKeyword, setHotKeyword] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
 
   return (
@@ -75,10 +75,8 @@ export default function StrategyPage() {
         />
       ) : (
         <AggressiveMode
-          hotKeyword={hotKeyword}
           searchKeyword={searchKeyword}
           onSearch={(kw) => {
-            setHotKeyword(kw);
             setSearchKeyword(kw);
           }}
         />
@@ -97,6 +95,13 @@ function ConservativeMode({
   onSearch: (code: string) => void;
 }) {
   const [input, setInput] = useState("");
+
+  // Auto-scan: top 10 bottom signals from high-volume stocks
+  const { data: scanResults, isLoading: scanLoading } = useSWR(
+    "/api/stocks?action=strategy-scan&mode=conservative&count=10",
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60000 },
+  );
 
   // First search for the stock to get market info
   const { data: searchResults } = useSWR(
@@ -141,8 +146,76 @@ function ConservativeMode({
         </div>
       </Card>
 
+      {/* Auto Scan Results */}
+      <Card
+        title="📊 今日抄底机会（成交额 Top50 中信号最强）"
+        style={{ marginBottom: 16, borderLeft: "4px solid #1677ff" }}
+      >
+        {scanLoading ? (
+          <div style={{ textAlign: "center", padding: 40 }}>
+            <Spin tip="正在扫描全市场，分析抄底信号..." size="large" />
+          </div>
+        ) : scanResults && scanResults.length > 0 ? (
+          <Row gutter={[12, 12]}>
+            {scanResults.map((stock: ConservativeScanResult) => {
+              const signalColor = stock.signalStrength >= 5 ? "#52c41a" : stock.signalStrength >= 3 ? "#faad14" : "#fa8c16";
+              const signalLabel = stock.signalStrength >= 5 ? "强烈关注" : stock.signalStrength >= 3 ? "值得关注" : "轻度关注";
+              return (
+                <Col xs={24} sm={12} key={stock.code}>
+                  <Link href={`/stocks/${stock.code}?market=${stock.market}`}>
+                    <Card
+                      size="small"
+                      hoverable
+                      style={{ borderLeft: `4px solid ${signalColor}` }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ marginBottom: 4 }}>
+                            <Text strong style={{ fontSize: 17 }}>{stock.name}</Text>
+                            <Text type="secondary" style={{ marginLeft: 8 }}>{stock.code}</Text>
+                            {stock.industry && <Tag color="blue" style={{ marginLeft: 6 }}>{stock.industry}</Tag>}
+                          </div>
+                          <div style={{ marginBottom: 4, display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
+                            {stock.pe > 0 && <Tag style={{ fontSize: 12 }}>PE {stock.pe.toFixed(1)}</Tag>}
+                            {stock.pb > 0 && <Tag style={{ fontSize: 12 }}>PB {stock.pb.toFixed(2)}</Tag>}
+                            {stock.totalMarketCap > 0 && <Tag style={{ fontSize: 12 }}>市值 {formatAmount(stock.totalMarketCap)}</Tag>}
+                          </div>
+                          <div style={{ marginBottom: 4 }}>
+                            <Text style={{ color: getPriceColor(stock.changePercent), fontWeight: 700, fontSize: 16 }}>
+                              ¥{stock.price.toFixed(2)}
+                            </Text>
+                            <Text style={{ color: getPriceColor(stock.changePercent), marginLeft: 8 }}>
+                              {formatPercent(stock.changePercent)}
+                            </Text>
+                          </div>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                            {stock.signals.map((signal: string, i: number) => (
+                              <Tag key={i} color="red" style={{ fontSize: 12 }}>{signal}</Tag>
+                            ))}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: "right", minWidth: 80 }}>
+                          <Tag color={stock.signalStrength >= 5 ? "green" : stock.signalStrength >= 3 ? "gold" : "orange"} style={{ fontSize: 14, padding: "2px 8px" }}>
+                            {stock.signalStrength}/8
+                          </Tag>
+                          <div style={{ fontSize: 12, color: signalColor, marginTop: 4 }}>{signalLabel}</div>
+                        </div>
+                      </div>
+                    </Card>
+                  </Link>
+                </Col>
+              );
+            })}
+          </Row>
+        ) : (
+          <Empty description="当前成交额 Top50 中暂无明显抄底信号" />
+        )}
+      </Card>
+
+      <Divider />
+
       {/* Stock Search */}
-      <Card title="🔍 输入股票代码分析" style={{ marginBottom: 16 }}>
+      <Card title="🔍 手动输入股票代码分析" style={{ marginBottom: 16 }}>
         <Search
           placeholder="输入股票代码或名称，如 600519 或 贵州茅台"
           size="large"
@@ -249,15 +322,20 @@ function ConservativeMode({
 }
 
 function AggressiveMode({
-  hotKeyword,
   searchKeyword,
   onSearch,
 }: {
-  hotKeyword: string;
   searchKeyword: string;
   onSearch: (kw: string) => void;
 }) {
   const [input, setInput] = useState("");
+
+  // Auto-scan: top 10 active stocks in 5-30 yuan range
+  const { data: scanResults, isLoading: scanLoading } = useSWR(
+    "/api/stocks?action=strategy-scan&mode=aggressive&count=10",
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60000 },
+  );
 
   // Search stocks matching keyword and filter price
   const { data: searchResults, isLoading } = useSWR(
@@ -282,6 +360,66 @@ function AggressiveMode({
           </Space>
         </div>
       </Card>
+
+      {/* Auto Scan Results */}
+      <Card
+        title={<><FireOutlined style={{ color: "#fa541c" }} /> 今日活跃标的（5-30元区间，换手率最高）</>}
+        style={{ marginBottom: 16, borderLeft: "4px solid #fa541c" }}
+      >
+        {scanLoading ? (
+          <div style={{ textAlign: "center", padding: 40 }}>
+            <Spin tip="正在筛选活跃标的..." size="large" />
+          </div>
+        ) : scanResults && scanResults.length > 0 ? (
+          <>
+            <Alert
+              type="warning"
+              description="以下为成交额最高的 5-30 元股票，按换手率排序。热点轮动快，追涨需谨慎。"
+              showIcon
+              style={{ marginBottom: 12 }}
+            />
+            <Row gutter={[12, 12]}>
+              {scanResults.map((stock: AggressiveScanResult) => (
+                <Col xs={24} sm={12} key={stock.code}>
+                  <Link href={`/stocks/${stock.code}?market=${stock.market}`}>
+                    <Card size="small" hoverable style={{ borderLeft: "4px solid #fa541c" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ marginBottom: 4 }}>
+                            <Text strong style={{ fontSize: 17 }}>{stock.name}</Text>
+                            <Text type="secondary" style={{ marginLeft: 8 }}>{stock.code}</Text>
+                            {stock.industry && <Tag color="orange" style={{ marginLeft: 6 }}>{stock.industry}</Tag>}
+                          </div>
+                          <div style={{ marginBottom: 4, display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
+                            {stock.pe > 0 && <Tag style={{ fontSize: 12 }}>PE {stock.pe.toFixed(1)}</Tag>}
+                            {stock.pb > 0 && <Tag style={{ fontSize: 12 }}>PB {stock.pb.toFixed(2)}</Tag>}
+                            {stock.totalMarketCap > 0 && <Tag style={{ fontSize: 12 }}>市值 {formatAmount(stock.totalMarketCap)}</Tag>}
+                          </div>
+                          <Text style={{ color: getPriceColor(stock.changePercent), fontWeight: 700, fontSize: 16 }}>
+                            ¥{stock.price.toFixed(2)}
+                          </Text>
+                          <Text style={{ color: getPriceColor(stock.changePercent), marginLeft: 8 }}>
+                            {formatPercent(stock.changePercent)}
+                          </Text>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <Tag color="volcano" style={{ fontSize: 14, padding: "2px 8px" }}>
+                            换手 {stock.turnoverRate.toFixed(2)}%
+                          </Tag>
+                        </div>
+                      </div>
+                    </Card>
+                  </Link>
+                </Col>
+              ))}
+            </Row>
+          </>
+        ) : (
+          <Empty description="当前暂无符合条件的活跃标的" />
+        )}
+      </Card>
+
+      <Divider />
 
       {/* Current Hotspots */}
       <Card title="🔥 当前市场热点" style={{ marginBottom: 16 }}>
@@ -376,6 +514,36 @@ function AggressiveMode({
 }
 
 // --- Client-side analysis utilities ---
+
+interface ConservativeScanResult {
+  code: string;
+  name: string;
+  market: number;
+  price: number;
+  changePercent: number;
+  signalStrength: number;
+  signals: string[];
+  recommendation: string;
+  rsi: number;
+  yearlyPercentile: number;
+  industry: string;
+  pe: number;
+  pb: number;
+  totalMarketCap: number;
+}
+
+interface AggressiveScanResult {
+  code: string;
+  name: string;
+  market: number;
+  price: number;
+  changePercent: number;
+  turnoverRate: number;
+  industry: string;
+  pe: number;
+  pb: number;
+  totalMarketCap: number;
+}
 
 const HOTSPOT_TOPICS = [
   { keyword: "人工智能", icon: "🤖", heat: 95 },

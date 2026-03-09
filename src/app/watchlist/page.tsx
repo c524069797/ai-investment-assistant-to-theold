@@ -1,9 +1,10 @@
 "use client";
 
-import { Typography, Card, Row, Col, Button, Empty, Spin, message } from "antd";
+import { Typography, Card, Button, Empty, message, Spin } from "antd";
 import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import Link from "next/link";
 import { useWatchlist } from "@/lib/hooks/useWatchlist";
+import { useUser } from "@/lib/hooks/useUser";
 import { useStockQuote } from "@/lib/hooks/useStockData";
 import useSWR from "swr";
 import { getPriceColor, formatPercent, formatPrice } from "@/styles/stock-colors";
@@ -100,15 +101,29 @@ function FundWatchItem({ code, name, onRemove }: { code: string; name: string; o
 }
 
 export default function WatchlistPage() {
-  const { items, removeItem } = useWatchlist();
+  const { items, isLoading: watchlistLoading, removeItem } = useWatchlist();
+  const { currentUser, isLoading: userLoading } = useUser();
 
   const stocks = items.filter((i) => i.type === "stock");
   const funds = items.filter((i) => i.type === "fund");
 
+  const userName = currentUser?.name ?? "我";
+
+  if (userLoading || watchlistLoading) {
+    return (
+      <div className="page-container">
+        <Title level={3}>⭐ 自选列表</Title>
+        <div style={{ textAlign: "center", padding: 60 }}>
+          <Spin size="large" tip="加载中..." />
+        </div>
+      </div>
+    );
+  }
+
   if (items.length === 0) {
     return (
       <div className="page-container">
-        <Title level={3}>⭐ 我的自选</Title>
+        <Title level={3}>{currentUser?.avatar ?? "⭐"} {userName}的自选</Title>
         <Card style={{ textAlign: "center", padding: "60px 20px" }}>
           <Empty
             description={
@@ -137,7 +152,7 @@ export default function WatchlistPage() {
 
   return (
     <div className="page-container">
-      <Title level={3}>⭐ 我的自选</Title>
+      <Title level={3}>{currentUser?.avatar ?? "⭐"} {userName}的自选</Title>
 
       {stocks.length > 0 && (
         <Card title={`📈 自选股票 (${stocks.length})`} style={{ marginBottom: 16 }}>

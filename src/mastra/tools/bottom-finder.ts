@@ -1,6 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { fetchStockKLine, fetchMarketIndices } from "@/lib/api/eastmoney";
+import { fetchStockKLine } from "@/lib/api/eastmoney";
 
 /** 计算简易 RSI (14日) */
 function calculateRSI(closes: number[], period = 14): number {

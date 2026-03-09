@@ -22,3 +22,10 @@ export function formatPercent(value: number): string {
 export function formatPrice(value: number): string {
   return value.toFixed(2);
 }
+
+export function formatAmount(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "--";
+  if (value >= 100000000) return `${(value / 100000000).toFixed(2)}亿`;
+  if (value >= 10000) return `${(value / 10000).toFixed(2)}万`;
+  return value.toFixed(0);
+}

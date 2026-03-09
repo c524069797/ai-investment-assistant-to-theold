@@ -5,6 +5,7 @@ import zhCN from "antd/locale/zh_CN";
 import { AntdRegistry } from "@ant-design/nextjs-registry";
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { elderlyTheme } from "@/styles/theme";
+import { UserProvider } from "@/lib/hooks/useUser";
 import type { ThemeConfig } from "antd";
 
 interface FontSizeContextValue {
@@ -62,7 +63,9 @@ export default function AntdProvider({ children }: { children: React.ReactNode }
     <FontSizeContext.Provider value={fontSizeValue}>
       <AntdRegistry>
         <ConfigProvider theme={theme} locale={zhCN}>
-          <App>{children}</App>
+          <App>
+            <UserProvider>{children}</UserProvider>
+          </App>
         </ConfigProvider>
       </AntdRegistry>
     </FontSizeContext.Provider>

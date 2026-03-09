@@ -6,6 +6,12 @@ export interface QuizQuestion {
   explanation: string;
 }
 
+export interface LessonChart {
+  id: string;
+  title: string;
+  option: Record<string, unknown>;
+}
+
 export interface Lesson {
   id: string;
   title: string;
@@ -14,4 +20,5 @@ export interface Lesson {
   content: string;
   quiz: QuizQuestion[];
   order: number;
+  charts?: LessonChart[];
 }

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Input, Typography, Row, Col, Card, Spin, Empty, Select } from "antd";
-import { SearchOutlined } from "@ant-design/icons";
+import { useState, useCallback } from "react";
+import { Input, Typography, Row, Col, Card, Spin, Empty, Select, Button } from "antd";
+import { SearchOutlined, ReloadOutlined } from "@ant-design/icons";
 import useSWR from "swr";
 import FundCard from "@/components/fund/FundCard";
 import type { FundSearchResult } from "@/types/fund";
@@ -22,7 +22,7 @@ export default function FundsPage() {
   const [keyword, setKeyword] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("");
 
-  const { data: searchResults, isLoading } = useSWR<FundSearchResult[]>(
+  const { data: searchResults, isLoading, mutate } = useSWR<FundSearchResult[]>(
     keyword ? `/api/funds?action=search&keyword=${encodeURIComponent(keyword)}` : null,
     fetcher,
     { dedupingInterval: 1000 },
@@ -32,11 +32,15 @@ export default function FundsPage() {
     (f) => !typeFilter || f.type.includes(typeFilter),
   );
 
+  const handleRefresh = useCallback(() => {
+    if (keyword) mutate();
+  }, [keyword, mutate]);
+
   return (
     <div className="page-container">
       <Title level={3}>基金查询</Title>
 
-      <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap", alignItems: "center" }}>
         <Search
           placeholder="输入基金代码或名称，如 110011"
           size="large"
@@ -56,24 +60,18 @@ export default function FundsPage() {
             value: label,
           }))}
         />
+        <Button
+          icon={<ReloadOutlined />}
+          size="large"
+          onClick={handleRefresh}
+          title="刷新行情"
+        >
+          刷新
+        </Button>
       </div>
 
-      {/* Search Guidance */}
-      {!keyword && (
-        <Card>
-          <div style={{ textAlign: "center", padding: "40px 20px" }}>
-            <Typography.Title level={4} style={{ color: "#666" }}>
-              🔍 请输入基金代码或名称进行搜索
-            </Typography.Title>
-            <Typography.Text style={{ fontSize: 16, color: "#999" }}>
-              例如：110011、易方达、沪深300 等
-            </Typography.Text>
-          </div>
-        </Card>
-      )}
-
-      {/* Results */}
-      {keyword && (
+      {/* Search Results - directly below search bar */}
+      {keyword ? (
         <Card title={`🔍 搜索结果：${keyword}`}>
           {isLoading ? (
             <div style={{ textAlign: "center", padding: 20 }}><Spin tip="搜索中..." /></div>
@@ -88,6 +86,17 @@ export default function FundsPage() {
           ) : (
             <Empty description={`未找到与"${keyword}"相关的基金`} />
           )}
+        </Card>
+      ) : (
+        <Card>
+          <div style={{ textAlign: "center", padding: "40px 20px" }}>
+            <Typography.Title level={4} style={{ color: "#666" }}>
+              🔍 请输入基金代码或名称进行搜索
+            </Typography.Title>
+            <Typography.Text style={{ fontSize: 16, color: "#999" }}>
+              例如：110011、易方达、沪深300 等
+            </Typography.Text>
+          </div>
         </Card>
       )}
     </div>

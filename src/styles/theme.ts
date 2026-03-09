@@ -7,12 +7,12 @@ export const elderlyTheme: ThemeConfig = {
       "'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif",
     lineHeight: 1.8,
     controlHeight: 48,
-    borderRadius: 12,
-    colorPrimary: "#1677ff",
+    borderRadius: 14,
+    colorPrimary: "#2b56c2",
     colorSuccess: "#389e0d",
     colorError: "#cf1322",
     colorWarning: "#faad14",
-    colorBgLayout: "#f5f5f5",
+    colorBgLayout: "#f3f6fb",
     colorText: "rgba(0, 0, 0, 0.88)",
   },
   components: {
@@ -27,6 +27,8 @@ export const elderlyTheme: ThemeConfig = {
     },
     Card: {
       paddingLG: 24,
+      headerHeight: 58,
+      borderRadiusLG: 16,
     },
     Menu: {
       fontSize: 16,

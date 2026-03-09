@@ -5,8 +5,8 @@ import AppHeader from "@/components/layout/AppHeader";
 import BottomNav from "@/components/layout/BottomNav";
 
 export const metadata: Metadata = {
-  title: "智能投资助手 - AI Investment Assistant",
-  description: "面向中老年投资者的 AI 智能投资助手，提供 A 股行情、基金数据、AI 问答和投资教学",
+  title: "A股智能投资助手",
+  description: "聚焦A股市场的智能投资助手，提供沪深行情、策略筛选、AI问答与投资教学",
 };
 
 export default function RootLayout({

@@ -2,6 +2,8 @@
 
 import { Typography } from "antd";
 import { RobotOutlined, UserOutlined } from "@ant-design/icons";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { UIMessage } from "ai";
 
 const { Text } = Typography;
@@ -19,6 +21,7 @@ function getMessageText(message: UIMessage): string {
 
 export default function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === "user";
+  const text = getMessageText(message);
 
   return (
     <div
@@ -56,13 +59,20 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
           boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
           fontSize: 16,
           lineHeight: 1.8,
-          whiteSpace: "pre-wrap",
           wordBreak: "break-word",
         }}
       >
-        <Text style={{ color: isUser ? "#fff" : "#333", fontSize: 16 }}>
-          {getMessageText(message)}
-        </Text>
+        {isUser ? (
+          <Text style={{ color: "#fff", fontSize: 16, whiteSpace: "pre-wrap" }}>
+            {text}
+          </Text>
+        ) : (
+          <div className="markdown-body" style={{ color: "#333", fontSize: 16 }}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {text}
+            </ReactMarkdown>
+          </div>
+        )}
       </div>
 
       {isUser && (

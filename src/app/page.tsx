@@ -1,54 +1,160 @@
 "use client";
 
-import { Typography, Card, Row, Col, Button, Space, Alert, Spin, Segmented } from "antd";
+import { Typography, Card, Row, Col, Button, Space, Alert, Spin, Segmented, Tag } from "antd";
 import {
   RobotOutlined,
   StockOutlined,
-  FundOutlined,
   ReadOutlined,
   StarOutlined,
   ThunderboltOutlined,
   SafetyCertificateOutlined,
+  AimOutlined,
+  FundProjectionScreenOutlined,
+  BarChartOutlined,
+  ArrowUpOutlined,
+  ArrowDownOutlined,
+  MinusOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import Link from "next/link";
-import { useState } from "react";
-import { useMarketIndices } from "@/lib/hooks/useStockData";
+import useSWR from "swr";
+import { useMemo, useState } from "react";
+import { useMarketIndices, useStockQuote } from "@/lib/hooks/useStockData";
 import { useWatchlist } from "@/lib/hooks/useWatchlist";
 import StockCard from "@/components/stock/StockCard";
+import FundCard from "@/components/fund/FundCard";
+import type { FundEstimate } from "@/types/fund";
 import { STRATEGY_MODES, type StrategyMode } from "@/lib/constants/market";
+import { formatPercent, getPriceColor } from "@/styles/stock-colors";
+import AshareRadar from "@/components/dashboard/AshareRadar";
 
 const { Title, Text, Paragraph } = Typography;
 
-const QUICK_ENTRIES = [
-  { href: "/chat", icon: <RobotOutlined style={{ fontSize: 32 }} />, label: "AI 助手", color: "#1677ff" },
-  { href: "/stocks", icon: <StockOutlined style={{ fontSize: 32 }} />, label: "查股票", color: "#cf1322" },
-  { href: "/funds", icon: <FundOutlined style={{ fontSize: 32 }} />, label: "看基金", color: "#389e0d" },
-  { href: "/education", icon: <ReadOutlined style={{ fontSize: 32 }} />, label: "学投资", color: "#faad14" },
-  { href: "/watchlist", icon: <StarOutlined style={{ fontSize: 32 }} />, label: "自选股", color: "#722ed1" },
+const ACTION_ENTRIES = [
+  { href: "/stocks", icon: <StockOutlined />, label: "沪深行情" },
+  { href: "/strategy", icon: <AimOutlined />, label: "策略筛选" },
+  { href: "/chat", icon: <RobotOutlined />, label: "AI 分析" },
+  { href: "/watchlist", icon: <StarOutlined />, label: "自选复盘" },
+  { href: "/education", icon: <ReadOutlined />, label: "投资学堂" },
+  { href: "/funds", icon: <FundProjectionScreenOutlined />, label: "基金对比" },
 ];
 
 export default function HomePage() {
-  const { data: indices, isLoading: indicesLoading } = useMarketIndices();
+  const { data: indices, isLoading: indicesLoading, mutate: mutateIndices } = useMarketIndices();
   const { items: watchlist } = useWatchlist();
   const [strategy, setStrategy] = useState<StrategyMode>("conservative");
 
   const currentStrategy = STRATEGY_MODES[strategy];
+  const marketStats = useMemo(() => {
+    if (!indices || indices.length === 0) {
+      return { upCount: 0, downCount: 0, flatCount: 0, avgChange: 0 };
+    }
+
+    const upCount = indices.filter((idx) => idx.changePercent > 0).length;
+    const downCount = indices.filter((idx) => idx.changePercent < 0).length;
+    const flatCount = indices.length - upCount - downCount;
+    const avgChange =
+      indices.reduce((sum, idx) => sum + idx.changePercent, 0) / indices.length;
+
+    return { upCount, downCount, flatCount, avgChange };
+  }, [indices]);
+
+  const avgColor = getPriceColor(marketStats.avgChange);
 
   return (
     <div className="page-container">
-      {/* Welcome */}
-      <Card style={{ marginBottom: 16, background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)" }}>
-        <Title level={3} style={{ color: "#fff", margin: 0 }}>
-          您好，欢迎使用智能投资助手 👋
+      <Card className="dashboard-hero" style={{ marginBottom: 16 }}>
+        <Text className="hero-eyebrow">A股 · 交易驾驶舱</Text>
+        <Title level={2} className="hero-title">
+          AI 智能投资助手
         </Title>
-        <Paragraph style={{ color: "rgba(255,255,255,0.85)", fontSize: 16, margin: "8px 0 0" }}>
-          我是您的 AI 投资助手"小智"，可以帮您查行情、看基金、学投资知识。
+        <Paragraph className="hero-subtitle">
+          由全球最先进的 AI 大模型驱动，为您提供 A 股沪深主板、创业板、科创板的实时行情追踪、智能技术分析、个股/基金深度解读与策略信号。AI 可理解复杂市场逻辑，辅助您做出更理性的投资决策。
         </Paragraph>
+        <div className="hero-actions">
+          <Link href="/stocks">
+            <Button type="primary" size="large" icon={<BarChartOutlined />}>
+              查看实时行情
+            </Button>
+          </Link>
+          <Link href="/chat">
+            <Button size="large" icon={<RobotOutlined />}>
+              AI 智能分析
+            </Button>
+          </Link>
+        </div>
       </Card>
 
-      {/* Strategy Mode Selector */}
+      <Row gutter={[12, 12]} className="summary-grid" style={{ marginBottom: 16 }}>
+        <Col xs={12} md={6}>
+          <Card className="summary-card">
+            <Text className="summary-label">指数上涨数</Text>
+            <div className="summary-value up">{marketStats.upCount}</div>
+            <Text className="summary-trend">强势板块扩散</Text>
+          </Card>
+        </Col>
+        <Col xs={12} md={6}>
+          <Card className="summary-card">
+            <Text className="summary-label">指数下跌数</Text>
+            <div className="summary-value down">{marketStats.downCount}</div>
+            <Text className="summary-trend">注意回撤控制</Text>
+          </Card>
+        </Col>
+        <Col xs={12} md={6}>
+          <Card className="summary-card">
+            <Text className="summary-label">震荡指数</Text>
+            <div className="summary-value flat">{marketStats.flatCount}</div>
+            <Text className="summary-trend">等待方向确认</Text>
+          </Card>
+        </Col>
+        <Col xs={12} md={6}>
+          <Card className="summary-card">
+            <Text className="summary-label">指数均值涨跌</Text>
+            <div className="summary-value" style={{ color: avgColor }}>
+              {formatPercent(marketStats.avgChange)}
+            </div>
+            <Text className="summary-trend">盘面温度快照</Text>
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={24} lg={14}>
+          <Card>
+            <div className="section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <Title level={4} className="section-title">A股实时指数</Title>
+                <Text className="section-subtitle">上证/深证/创业板核心指数，15秒自动刷新</Text>
+              </div>
+              <Button icon={<ReloadOutlined />} onClick={() => mutateIndices()} title="手动刷新">
+                刷新
+              </Button>
+            </div>
+
+            {indicesLoading ? (
+              <div style={{ textAlign: "center", padding: 20 }}><Spin /></div>
+            ) : indices ? (
+              <Row gutter={[12, 12]}>
+                {indices.map((idx) => (
+                  <Col xs={24} sm={12} key={idx.code}>
+                    <StockCard stock={idx} />
+                  </Col>
+                ))}
+              </Row>
+            ) : (
+              <Text type="secondary">暂无数据</Text>
+            )}
+          </Card>
+        </Col>
+        <Col xs={24} lg={10}>
+          <AshareRadar />
+        </Col>
+      </Row>
+
+      <IndexAnalysis />
+
       <Card
-        title="🎯 投资策略模式"
+        title="🎯 A股策略模式"
         style={{ marginBottom: 16 }}
         extra={
           <Segmented
@@ -86,42 +192,32 @@ export default function HomePage() {
           </Paragraph>
           <div style={{ marginTop: 12, padding: 12, background: "#f6f8fa", borderRadius: 8 }}>
             {strategy === "conservative" ? (
-              <Space orientation="vertical" size={4}>
-                <Text style={{ fontSize: 15 }}>• <strong>买入信号</strong>：RSI &lt; 30（超卖）、触及布林带下轨、250日均线附近</Text>
-                <Text style={{ fontSize: 15 }}>• <strong>止盈目标</strong>：10%</Text>
-                <Text style={{ fontSize: 15 }}>• <strong>补仓规则</strong>：下跌 5% 后评估基本面，分批补仓</Text>
-                <Text style={{ fontSize: 15 }}>• <strong>风格特点</strong>：稳健、耐心、注重基本面和估值</Text>
+              <Space direction="vertical" size={4}>
+                <Text style={{ fontSize: 15 }}>• <strong>买入区间</strong>：RSI &lt; 30、靠近布林带下轨、回踩年线</Text>
+                <Text style={{ fontSize: 15 }}>• <strong>分批原则</strong>：先轻仓试错，再根据成交量确认加仓</Text>
+                <Text style={{ fontSize: 15 }}>• <strong>止盈纪律</strong>：单笔目标 8%-12%，不贪多</Text>
+                <Text style={{ fontSize: 15 }}>• <strong>适用市场</strong>：震荡市和高股息权重股</Text>
               </Space>
             ) : (
-              <Space orientation="vertical" size={4}>
-                <Text style={{ fontSize: 15 }}>• <strong>买入信号</strong>：热点题材匹配 + 股价在 5-30 元区间</Text>
-                <Text style={{ fontSize: 15 }}>• <strong>止盈目标</strong>：20%</Text>
-                <Text style={{ fontSize: 15 }}>• <strong>止损规则</strong>：热点消散即止损，不盲目补仓</Text>
-                <Text style={{ fontSize: 15 }}>• <strong>风格特点</strong>：敏锐、果断、对新事物敏感</Text>
+              <Space direction="vertical" size={4}>
+                <Text style={{ fontSize: 15 }}>• <strong>触发条件</strong>：题材热度提升 + 放量突破 + 换手活跃</Text>
+                <Text style={{ fontSize: 15 }}>• <strong>止盈策略</strong>：分级止盈，先锁定 10% 再看趋势</Text>
+                <Text style={{ fontSize: 15 }}>• <strong>止损规则</strong>：跌破关键支撑线，严格退出</Text>
+                <Text style={{ fontSize: 15 }}>• <strong>适用市场</strong>：趋势市和题材轮动行情</Text>
               </Space>
             )}
           </div>
         </div>
       </Card>
 
-      {/* Quick Entries */}
-      <Card title="🚀 快捷入口" style={{ marginBottom: 16 }}>
-        <Row gutter={[12, 12]}>
-          {QUICK_ENTRIES.map((entry) => (
-            <Col xs={8} sm={4} key={entry.href}>
+      <Card title="🚀 交易功能区" style={{ marginBottom: 16 }}>
+        <Row gutter={[12, 12]} className="action-grid">
+          {ACTION_ENTRIES.map((entry) => (
+            <Col xs={8} sm={8} md={4} key={entry.href}>
               <Link href={entry.href}>
-                <div
-                  style={{
-                    textAlign: "center",
-                    padding: "16px 8px",
-                    borderRadius: 12,
-                    background: "#fafafa",
-                    cursor: "pointer",
-                    transition: "all 0.2s",
-                  }}
-                >
-                  <div style={{ color: entry.color }}>{entry.icon}</div>
-                  <Text style={{ fontSize: 15, marginTop: 8, display: "block" }}>{entry.label}</Text>
+                <div className="action-tile">
+                  <div className="action-icon">{entry.icon}</div>
+                  <Text className="action-label">{entry.label}</Text>
                 </div>
               </Link>
             </Col>
@@ -129,51 +225,333 @@ export default function HomePage() {
         </Row>
       </Card>
 
-      {/* Market Indices */}
-      <Card title="📊 大盘指数" style={{ marginBottom: 16 }}>
-        {indicesLoading ? (
-          <div style={{ textAlign: "center", padding: 20 }}><Spin /></div>
-        ) : indices ? (
-          <Row gutter={[12, 12]}>
-            {indices.map((idx) => (
-              <Col xs={24} sm={12} md={8} key={idx.code}>
-                <StockCard stock={idx} />
-              </Col>
-            ))}
-          </Row>
-        ) : (
-          <Text type="secondary">暂无数据</Text>
-        )}
-      </Card>
-
-      {/* Watchlist Preview */}
       {watchlist.length > 0 && (
         <Card
-          title="⭐ 我的自选"
+          title="⭐ 我的A股自选"
           extra={<Link href="/watchlist"><Button type="link">查看全部</Button></Link>}
           style={{ marginBottom: 16 }}
         >
           <Row gutter={[12, 12]}>
             {watchlist.slice(0, 4).map((item) => (
               <Col xs={24} sm={12} key={`${item.type}-${item.code}`}>
-                <StockCard
-                  stock={{ ...item, price: 0, change: 0, changePercent: 0, volume: 0, amount: 0 }}
-                  linkTo={item.type === "stock" ? `/stocks/${item.code}?market=${item.market}` : `/funds/${item.code}`}
-                />
+                {item.type === "stock" ? (
+                  <WatchlistStockPreview code={item.code} name={item.name} market={item.market} />
+                ) : (
+                  <WatchlistFundPreview code={item.code} name={item.name} />
+                )}
               </Col>
             ))}
           </Row>
         </Card>
       )}
 
-      {/* Risk Disclaimer */}
       <Alert
-        title="投资风险提示"
-        description="投资有风险，入市需谨慎。本应用提供的数据和分析仅供参考，不构成投资建议。请根据自身情况谨慎决策。"
+        message="A股交易风险提示"
+        description="市场波动受政策、流动性和情绪影响较大。页面中的 AI 评分和策略建议仅用于研究与学习，不构成任何投资建议。"
         type="warning"
         showIcon
         style={{ marginBottom: 16 }}
       />
     </div>
+  );
+}
+
+// --- Watchlist preview components with real-time data ---
+
+const watchlistFetcher = async (url: string) => {
+  const res = await fetch(url);
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error);
+  return json.data;
+};
+
+function WatchlistStockPreview({ code, name, market }: { code: string; name: string; market: number }) {
+  const { data: quote, isLoading } = useStockQuote(market, code);
+
+  if (isLoading) {
+    return <Card size="small" loading />;
+  }
+
+  return (
+    <StockCard
+      stock={{
+        code,
+        name: quote?.name ?? name,
+        price: quote?.price ?? 0,
+        change: quote?.change ?? 0,
+        changePercent: quote?.changePercent ?? 0,
+        volume: quote?.volume ?? 0,
+        amount: quote?.amount ?? 0,
+      }}
+      linkTo={`/stocks/${code}?market=${market}`}
+    />
+  );
+}
+
+function WatchlistFundPreview({ code, name }: { code: string; name: string }) {
+  const { data: estimate, isLoading } = useSWR<FundEstimate>(
+    `/api/funds?action=estimate&code=${code}`,
+    watchlistFetcher,
+    { refreshInterval: 30000 },
+  );
+
+  if (isLoading) {
+    return <Card size="small" loading />;
+  }
+
+  if (estimate) {
+    return (
+      <FundCard
+        fund={estimate}
+        linkTo={`/funds/${code}`}
+      />
+    );
+  }
+
+  return (
+    <FundCard
+      fund={{ code, name, type: "基金", changePercent: 0 }}
+      linkTo={`/funds/${code}`}
+    />
+  );
+}
+
+// --- Index Technical Analysis (client-side, based on price levels) ---
+
+interface LevelInfo {
+  price: number;
+  reason: string;
+}
+
+interface IndexLevelAnalysis {
+  name: string;
+  code: string;
+  price: number;
+  changePercent: number;
+  preClose: number;
+  trend: string;
+  trendReason: string;
+  resistances: LevelInfo[];
+  supports: LevelInfo[];
+  notes: string[];
+}
+
+function analyzeIndexLevels(
+  name: string,
+  code: string,
+  price: number,
+  changePercent: number,
+  volume: number,
+  amount: number,
+): IndexLevelAnalysis {
+  const preClose = price / (1 + changePercent / 100);
+
+  // Determine round-number step based on price magnitude
+  const step = price > 10000 ? 500 : price > 3000 ? 100 : 50;
+
+  const supports: LevelInfo[] = [];
+  const resistances: LevelInfo[] = [];
+
+  // Round-number levels (psychological)
+  const nearestRoundBelow = Math.floor(price / step) * step;
+  const nearestRoundAbove = Math.ceil(price / step) * step;
+
+  if (nearestRoundAbove > price * 1.001) {
+    resistances.push({ price: nearestRoundAbove, reason: `${nearestRoundAbove} 整数关口压力` });
+  }
+  if (nearestRoundBelow < price * 0.999) {
+    supports.push({ price: nearestRoundBelow, reason: `${nearestRoundBelow} 整数关口支撑` });
+  }
+
+  // Next round number
+  const nextRoundAbove = nearestRoundAbove + step;
+  if (nextRoundAbove > price) {
+    resistances.push({ price: nextRoundAbove, reason: `${nextRoundAbove} 上方第二关口` });
+  }
+  const nextRoundBelow = nearestRoundBelow - step;
+  if (nextRoundBelow > 0 && nextRoundBelow < price) {
+    supports.push({ price: nextRoundBelow, reason: `${nextRoundBelow} 下方第二关口` });
+  }
+
+  // Yesterday's close as reference
+  const preCloseRound = Math.round(preClose * 100) / 100;
+  if (Math.abs(preCloseRound - price) / price > 0.001) {
+    if (preCloseRound > price) {
+      resistances.push({ price: preCloseRound, reason: "昨日收盘价压力" });
+    } else {
+      supports.push({ price: preCloseRound, reason: "昨日收盘价支撑" });
+    }
+  }
+
+  // Percentage-based levels (±2%, ±3%, ±5%)
+  const up3 = Math.round(preClose * 1.03 * 100) / 100;
+  const down3 = Math.round(preClose * 0.97 * 100) / 100;
+  if (up3 > price) {
+    resistances.push({ price: up3, reason: "日涨3%阻力位" });
+  }
+  if (down3 < price) {
+    supports.push({ price: down3, reason: "日跌3%支撑位" });
+  }
+
+  // Sort and limit
+  const sortedResistances = resistances
+    .filter((r) => r.price > price)
+    .sort((a, b) => a.price - b.price)
+    .slice(0, 3);
+  const sortedSupports = supports
+    .filter((s) => s.price < price)
+    .sort((a, b) => b.price - a.price)
+    .slice(0, 3);
+
+  // Trend
+  let trend: string;
+  let trendReason: string;
+  if (changePercent > 1) {
+    trend = "偏多";
+    trendReason = `今日上涨 ${changePercent.toFixed(2)}%，多方占优，量能${amount > 0 ? "配合" : "待观察"}`;
+  } else if (changePercent < -1) {
+    trend = "偏空";
+    trendReason = `今日下跌 ${changePercent.toFixed(2)}%，空方主导，注意风险控制`;
+  } else if (changePercent > 0) {
+    trend = "震荡偏多";
+    trendReason = `小幅上涨 ${changePercent.toFixed(2)}%，多空拉锯中，方向待确认`;
+  } else if (changePercent < 0) {
+    trend = "震荡偏空";
+    trendReason = `小幅下跌 ${changePercent.toFixed(2)}%，上方压力较重，等待方向`;
+  } else {
+    trend = "平盘";
+    trendReason = "多空平衡，等待突破方向";
+  }
+
+  // Notes
+  const notes: string[] = [];
+  if (Math.abs(price - nearestRoundAbove) / price < 0.005) {
+    notes.push(`逼近 ${nearestRoundAbove} 整数关口，突破放量则打开上行空间`);
+  }
+  if (Math.abs(price - nearestRoundBelow) / price < 0.005) {
+    notes.push(`接近 ${nearestRoundBelow} 整数关口，跌破可能加速下行`);
+  }
+  if (changePercent > 2) {
+    notes.push("涨幅较大，短线注意获利回吐压力");
+  }
+  if (changePercent < -2) {
+    notes.push("跌幅较深，关注是否出现恐慌性抛售或超跌反弹");
+  }
+
+  return {
+    name,
+    code,
+    price,
+    changePercent,
+    preClose: preCloseRound,
+    trend,
+    trendReason,
+    resistances: sortedResistances,
+    supports: sortedSupports,
+    notes,
+  };
+}
+
+function IndexAnalysis() {
+  const { data: indices, isLoading } = useMarketIndices();
+
+  const analysisData = useMemo(() => {
+    if (!indices || indices.length === 0) return [];
+    // Only analyze the main 3 indices
+    const targets = ["000001", "000300", "399006"];
+    return indices
+      .filter((idx) => targets.includes(idx.code))
+      .map((idx) => analyzeIndexLevels(idx.name, idx.code, idx.price, idx.changePercent, idx.volume, idx.amount));
+  }, [indices]);
+
+  const trendIcon = (trend: string) => {
+    if (trend.includes("多")) return <ArrowUpOutlined style={{ color: "#cf1322" }} />;
+    if (trend.includes("空")) return <ArrowDownOutlined style={{ color: "#389e0d" }} />;
+    return <MinusOutlined style={{ color: "#8c8c8c" }} />;
+  };
+
+  const trendColor = (trend: string) => {
+    if (trend.includes("多")) return "red" as const;
+    if (trend.includes("空")) return "green" as const;
+    return "default" as const;
+  };
+
+  return (
+    <Card
+      title="📐 指数关键价位分析 — 压力位与支撑位"
+      style={{ marginBottom: 16 }}
+    >
+      {isLoading ? (
+        <div style={{ textAlign: "center", padding: 30 }}><Spin tip="加载中..." /></div>
+      ) : analysisData.length > 0 ? (
+        <Row gutter={[16, 16]}>
+          {analysisData.map((idx) => (
+            <Col xs={24} md={8} key={idx.code}>
+              <Card
+                size="small"
+                title={
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {trendIcon(idx.trend)}
+                    <span style={{ fontWeight: 700 }}>{idx.name}</span>
+                    <Tag color={trendColor(idx.trend)}>{idx.trend}</Tag>
+                  </div>
+                }
+                style={{ height: "100%" }}
+              >
+                <div style={{ marginBottom: 8 }}>
+                  <Text style={{ fontSize: 20, fontWeight: 700, color: getPriceColor(idx.changePercent) }}>
+                    {idx.price.toFixed(2)}
+                  </Text>
+                  <Text style={{ color: getPriceColor(idx.changePercent), marginLeft: 8 }}>
+                    {formatPercent(idx.changePercent)}
+                  </Text>
+                </div>
+
+                <Text type="secondary" style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
+                  {idx.trendReason}
+                </Text>
+
+                {/* Resistance levels */}
+                <div style={{ marginBottom: 8 }}>
+                  <Text strong style={{ fontSize: 13, color: "#389e0d" }}>压力位（上方阻力）</Text>
+                  <div style={{ marginTop: 4 }}>
+                    {idx.resistances.map((r, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}>
+                        <Text style={{ fontSize: 13 }}>{r.reason}</Text>
+                        <Text strong style={{ fontSize: 13, color: "#389e0d" }}>{r.price.toFixed(2)}</Text>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Support levels */}
+                <div style={{ marginBottom: 8 }}>
+                  <Text strong style={{ fontSize: 13, color: "#cf1322" }}>支撑位（下方支撑）</Text>
+                  <div style={{ marginTop: 4 }}>
+                    {idx.supports.map((s, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}>
+                        <Text style={{ fontSize: 13 }}>{s.reason}</Text>
+                        <Text strong style={{ fontSize: 13, color: "#cf1322" }}>{s.price.toFixed(2)}</Text>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Key notes */}
+                {idx.notes.length > 0 && (
+                  <div style={{ marginTop: 4 }}>
+                    {idx.notes.map((note, i) => (
+                      <Alert key={i} type="info" description={note} showIcon style={{ marginBottom: 4, padding: "4px 8px" }} />
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </Col>
+          ))}
+        </Row>
+      ) : (
+        <Text type="secondary">暂无分析数据</Text>
+      )}
+    </Card>
   );
 }

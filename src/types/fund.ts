@@ -31,4 +31,42 @@ export interface FundSearchResult {
   code: string;
   name: string;
   type: string;
+  changePercent?: number;
+}
+
+/** 基金持仓股 */
+export interface FundHolding {
+  stockCode: string;
+  stockName: string;
+  holdPercent: number;
+  holdAmount: number;
+  holdMarketValue: number;
+}
+
+/** 基金费率信息 */
+export interface FundFeeInfo {
+  manageFee: string;
+  trustFee: string;
+  saleFee: string;
+  purchaseFee: string;
+  redeemFee: string;
+  totalOperationFee: string;
+}
+
+/** 基金详细信息 */
+export interface FundDetail {
+  code: string;
+  name: string;
+  type: string;
+  manager: string;
+  company: string;
+  establishDate: string;
+  scale: string;
+  holdings: FundHolding[];
+  holdingPeriod: string;
+  fees: FundFeeInfo;
+  benchmark: string;
+  performanceYTD: string;
+  performance1Y: string;
+  performance3Y: string;
 }

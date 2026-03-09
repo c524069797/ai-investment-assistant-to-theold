@@ -57,3 +57,12 @@ export function useMarketIndices() {
     refreshInterval: 15000,
   });
 }
+
+/** 题材热门股 (按成交额排序) */
+export function useTopicStocks(keyword: string) {
+  return useSWR<StockSearchResult[]>(
+    keyword ? `/api/stocks?action=topic&keyword=${encodeURIComponent(keyword)}&count=10` : null,
+    fetcher,
+    { dedupingInterval: 3000 },
+  );
+}

@@ -2,7 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { use } from "react";
-import { Typography, Card, Row, Col, Descriptions, Button, Segmented, Spin, Space, message } from "antd";
+import { Typography, Card, Descriptions, Button, Segmented, Spin, Space, message } from "antd";
 import { StarOutlined, StarFilled, ArrowLeftOutlined } from "@ant-design/icons";
 import Link from "next/link";
 import { useState } from "react";

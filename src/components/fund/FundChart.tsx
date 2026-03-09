@@ -30,6 +30,11 @@ export default function FundChart({ data, name }: FundChartProps) {
   const accNavs = sorted.map((d) => d.accNav);
 
   const option = {
+    title: {
+      text: `${name}净值走势`,
+      left: "center" as const,
+      textStyle: { fontSize: 14, fontWeight: 500 },
+    },
     tooltip: {
       trigger: "axis" as const,
       textStyle: { fontSize: 14 },
@@ -41,7 +46,7 @@ export default function FundChart({ data, name }: FundChartProps) {
     grid: {
       left: "10%",
       right: "5%",
-      top: 50,
+      top: 72,
       bottom: 40,
     },
     xAxis: {

@@ -18,7 +18,9 @@ function isFundEstimate(fund: FundEstimate | FundSearchResult): fund is FundEsti
 
 export default function FundCard({ fund, linkTo }: FundCardProps) {
   const hasEstimate = isFundEstimate(fund);
-  const color = hasEstimate ? getPriceColor(fund.estimateChangePercent) : "#8c8c8c";
+  const searchChange = !hasEstimate && "changePercent" in fund ? (fund.changePercent as number | undefined) : undefined;
+  const changeValue = hasEstimate ? fund.estimateChangePercent : searchChange;
+  const color = changeValue !== undefined ? getPriceColor(changeValue) : "#8c8c8c";
 
   const content = (
     <Card
@@ -47,16 +49,18 @@ export default function FundCard({ fund, linkTo }: FundCardProps) {
             )}
           </Space>
         </div>
-        {hasEstimate && (
-          <div style={{ textAlign: "right", flexShrink: 0 }}>
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          {hasEstimate && (
             <div style={{ fontSize: 20, fontWeight: 700, color }}>
               {fund.estimateNav.toFixed(4)}
             </div>
-            <Text style={{ color, fontSize: 15 }}>
-              {formatPercent(fund.estimateChangePercent)}
+          )}
+          {changeValue !== undefined && (
+            <Text style={{ color, fontSize: hasEstimate ? 15 : 18, fontWeight: hasEstimate ? 400 : 700 }}>
+              {formatPercent(changeValue)}
             </Text>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </Card>
   );

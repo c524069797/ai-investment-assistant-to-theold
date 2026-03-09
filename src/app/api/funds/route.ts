@@ -4,6 +4,7 @@ import {
   searchFunds,
   fetchFundHistoryNav,
   fetchFundList,
+  fetchFundDetail,
 } from "@/lib/api/tiantianfund";
 
 export async function GET(request: NextRequest) {
@@ -48,6 +49,15 @@ export async function GET(request: NextRequest) {
           data: data.slice(0, 100),
           total: data.length,
         });
+      }
+
+      case "detail": {
+        const code = searchParams.get("code") ?? "";
+        if (!code) {
+          return NextResponse.json({ error: "Missing code" }, { status: 400 });
+        }
+        const data = await fetchFundDetail(code);
+        return NextResponse.json({ success: true, data });
       }
 
       default:
