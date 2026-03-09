@@ -1,13 +1,13 @@
 import { PrismaClient } from "@prisma/client";
-import { withAccelerate } from "@prisma/extension-accelerate";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { hashPassword } from "@/lib/auth";
 
-const globalForPrisma = globalThis as unknown as { prisma: ReturnType<typeof createPrisma> };
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
 function createPrisma() {
-  return new PrismaClient({
-    accelerateUrl: process.env.DATABASE_URL,
-  }).$extends(withAccelerate());
+  const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
+  const adapter = new PrismaPg({ connectionString });
+  return new PrismaClient({ adapter });
 }
 
 export const prisma = globalForPrisma.prisma ?? createPrisma();
@@ -34,8 +34,7 @@ async function ensureSeeded() {
       });
     }
   } catch {
-    // Table might not exist yet — prisma db push needed
-    console.warn("[db] Could not seed users. Run `prisma db push` to create tables.");
+    console.warn("[db] Could not seed users. Ensure tables exist via `prisma db push`.");
   }
   seeded = true;
 }
