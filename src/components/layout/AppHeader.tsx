@@ -1,10 +1,10 @@
 "use client";
 
-import { Layout, Space, Button, Typography, Dropdown } from "antd";
+import { Layout, Space, Button, Typography } from "antd";
 import {
   FontSizeOutlined,
   StockOutlined,
-  UserSwitchOutlined,
+  LogoutOutlined,
 } from "@ant-design/icons";
 import Link from "next/link";
 import { useFontSize } from "./AntdProvider";
@@ -15,13 +15,7 @@ const { Title } = Typography;
 
 export default function AppHeader() {
   const { increase, decrease } = useFontSize();
-  const { currentUser, users, switchUser } = useUser();
-
-  const userMenuItems = users.map((u) => ({
-    key: u.id,
-    label: `${u.avatar} ${u.name}`,
-    onClick: () => switchUser(u.id),
-  }));
+  const { currentUser, logout } = useUser();
 
   return (
     <Header
@@ -50,14 +44,19 @@ export default function AppHeader() {
       </Link>
       <Space size={8}>
         {currentUser && (
-          <Dropdown menu={{ items: userMenuItems }} trigger={["click"]}>
-            <Button
-              icon={<UserSwitchOutlined />}
-              style={{ borderRadius: 10, fontWeight: 600 }}
-            >
+          <>
+            <span style={{ fontWeight: 600, fontSize: 15 }}>
               {currentUser.avatar} {currentUser.name}
+            </span>
+            <Button
+              size="small"
+              icon={<LogoutOutlined />}
+              onClick={logout}
+              style={{ borderRadius: 10 }}
+            >
+              退出
             </Button>
-          </Dropdown>
+          </>
         )}
         <Button size="small" onClick={decrease} style={{ borderRadius: 10 }}>
           A-

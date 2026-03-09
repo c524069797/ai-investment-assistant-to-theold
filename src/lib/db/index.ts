@@ -1,4 +1,5 @@
 import { sql } from "@vercel/postgres";
+import { hashPassword } from "@/lib/auth";
 
 // Ensure tables exist (called on first request)
 let initialized = false;
@@ -9,6 +10,8 @@ export async function ensureTables() {
   await sql`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
       name TEXT NOT NULL,
       avatar TEXT NOT NULL DEFAULT '👤',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -31,8 +34,9 @@ export async function ensureTables() {
   // Seed default users if empty
   const { rowCount } = await sql`SELECT 1 FROM users LIMIT 1`;
   if (rowCount === 0) {
-    await sql`INSERT INTO users (id, name, avatar) VALUES ('dad', '爸爸', '👨')`;
-    await sql`INSERT INTO users (id, name, avatar) VALUES ('mom', '妈妈', '👩')`;
+    const hash = hashPassword("123456");
+    await sql`INSERT INTO users (id, username, password_hash, name, avatar) VALUES ('dad', 'baba', ${hash}, '爸爸', '👨')`;
+    await sql`INSERT INTO users (id, username, password_hash, name, avatar) VALUES ('mom', 'mama', ${hash}, '妈妈', '👩')`;
   }
 
   initialized = true;
@@ -42,13 +46,19 @@ export async function ensureTables() {
 
 export async function getAllUsers() {
   await ensureTables();
-  const { rows } = await sql`SELECT id, name, avatar, created_at as "createdAt" FROM users ORDER BY created_at`;
+  const { rows } = await sql`SELECT id, username, name, avatar, created_at as "createdAt" FROM users ORDER BY created_at`;
   return rows;
 }
 
 export async function getUserById(id: string) {
   await ensureTables();
-  const { rows } = await sql`SELECT id, name, avatar FROM users WHERE id = ${id}`;
+  const { rows } = await sql`SELECT id, username, name, avatar FROM users WHERE id = ${id}`;
+  return rows[0] ?? null;
+}
+
+export async function getUserByUsername(username: string) {
+  await ensureTables();
+  const { rows } = await sql`SELECT id, username, password_hash as "passwordHash", name, avatar FROM users WHERE username = ${username}`;
   return rows[0] ?? null;
 }
 
@@ -78,7 +88,6 @@ export async function addToWatchlist(
     RETURNING id, user_id as "userId", code, name, market, type, added_at as "addedAt"
   `;
   if (rows.length > 0) return rows[0];
-  // Already exists, return existing
   const existing = await sql`
     SELECT id, user_id as "userId", code, name, market, type, added_at as "addedAt"
     FROM watchlist WHERE user_id = ${userId} AND code = ${item.code} AND type = ${item.type}
@@ -94,18 +103,6 @@ export async function removeFromWatchlist(
   await ensureTables();
   const { rowCount } = await sql`
     DELETE FROM watchlist WHERE user_id = ${userId} AND code = ${code} AND type = ${type}
-  `;
-  return (rowCount ?? 0) > 0;
-}
-
-export async function isInWatchlist(
-  userId: string,
-  code: string,
-  type: "stock" | "fund",
-) {
-  await ensureTables();
-  const { rowCount } = await sql`
-    SELECT 1 FROM watchlist WHERE user_id = ${userId} AND code = ${code} AND type = ${type}
   `;
   return (rowCount ?? 0) > 0;
 }
