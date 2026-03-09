@@ -37,8 +37,9 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (error) {
     console.error("[/api/auth/login] Error:", error);
+    const msg = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { success: false, error: "登录失败，请稍后重试" },
+      { success: false, error: msg },
       { status: 500 },
     );
   }

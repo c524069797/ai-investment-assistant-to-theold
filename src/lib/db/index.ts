@@ -1,123 +1,104 @@
-import { sql } from "@vercel/postgres";
+import { PrismaClient } from "@prisma/client";
+import { withAccelerate } from "@prisma/extension-accelerate";
 import { hashPassword } from "@/lib/auth";
 
-let initialized = false;
+const globalForPrisma = globalThis as unknown as { prisma: ReturnType<typeof createPrisma> };
 
-export async function ensureTables() {
-  if (initialized) return;
+function createPrisma() {
+  return new PrismaClient({
+    accelerateUrl: process.env.DATABASE_URL,
+  }).$extends(withAccelerate());
+}
 
-  // Check if users table has the username column (new schema)
-  // If not, drop old tables and recreate
+export const prisma = globalForPrisma.prisma ?? createPrisma();
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma;
+}
+
+// ---- Schema initialization ----
+
+let seeded = false;
+
+async function ensureSeeded() {
+  if (seeded) return;
   try {
-    const { rowCount } = await sql`
-      SELECT column_name FROM information_schema.columns
-      WHERE table_name = 'users' AND column_name = 'username'
-    `;
-    if (rowCount === 0) {
-      // Old schema exists without username column — drop and recreate
-      await sql`DROP TABLE IF EXISTS watchlist`;
-      await sql`DROP TABLE IF EXISTS users`;
+    const count = await prisma.user.count();
+    if (count === 0) {
+      const hash = hashPassword("123456");
+      await prisma.user.createMany({
+        data: [
+          { id: "dad", username: "baba", passwordHash: hash, name: "爸爸", avatar: "👨" },
+          { id: "mom", username: "mama", passwordHash: hash, name: "妈妈", avatar: "👩" },
+        ],
+      });
     }
   } catch {
-    // Tables don't exist yet, that's fine
+    // Table might not exist yet — prisma db push needed
+    console.warn("[db] Could not seed users. Run `prisma db push` to create tables.");
   }
-
-  await sql`
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      username TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
-      name TEXT NOT NULL,
-      avatar TEXT NOT NULL DEFAULT '👤',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
-
-  await sql`
-    CREATE TABLE IF NOT EXISTS watchlist (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL REFERENCES users(id),
-      code TEXT NOT NULL,
-      name TEXT NOT NULL,
-      market INTEGER NOT NULL DEFAULT 0,
-      type TEXT NOT NULL CHECK (type IN ('stock', 'fund')),
-      added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE(user_id, code, type)
-    )
-  `;
-
-  // Seed default users if empty
-  const { rowCount } = await sql`SELECT 1 FROM users LIMIT 1`;
-  if (rowCount === 0) {
-    const hash = hashPassword("123456");
-    await sql`INSERT INTO users (id, username, password_hash, name, avatar) VALUES ('dad', 'baba', ${hash}, '爸爸', '👨')`;
-    await sql`INSERT INTO users (id, username, password_hash, name, avatar) VALUES ('mom', 'mama', ${hash}, '妈妈', '👩')`;
-  }
-
-  initialized = true;
+  seeded = true;
 }
 
 // ---- User Operations ----
 
 export async function getAllUsers() {
-  await ensureTables();
-  const { rows } = await sql`SELECT id, username, name, avatar, created_at as "createdAt" FROM users ORDER BY created_at`;
-  return rows;
+  await ensureSeeded();
+  return prisma.user.findMany({
+    select: { id: true, username: true, name: true, avatar: true, createdAt: true },
+    orderBy: { createdAt: "asc" },
+  });
 }
 
 export async function getUserById(id: string) {
-  await ensureTables();
-  const { rows } = await sql`SELECT id, username, name, avatar FROM users WHERE id = ${id}`;
-  return rows[0] ?? null;
+  await ensureSeeded();
+  return prisma.user.findUnique({
+    where: { id },
+    select: { id: true, username: true, name: true, avatar: true },
+  });
 }
 
 export async function getUserByUsername(username: string) {
-  await ensureTables();
-  const { rows } = await sql`SELECT id, username, password_hash as "passwordHash", name, avatar FROM users WHERE username = ${username}`;
-  return rows[0] ?? null;
+  await ensureSeeded();
+  return prisma.user.findUnique({
+    where: { username },
+    select: { id: true, username: true, passwordHash: true, name: true, avatar: true },
+  });
 }
 
 // ---- Watchlist Operations ----
 
 export async function getWatchlist(userId: string) {
-  await ensureTables();
-  const { rows } = await sql`
-    SELECT id, user_id as "userId", code, name, market, type, added_at as "addedAt"
-    FROM watchlist
-    WHERE user_id = ${userId}
-    ORDER BY added_at DESC
-  `;
-  return rows;
+  await ensureSeeded();
+  return prisma.watchlist.findMany({
+    where: { userId },
+    orderBy: { addedAt: "desc" },
+  });
 }
 
 export async function addToWatchlist(
   userId: string,
-  item: { code: string; name: string; market: number; type: "stock" | "fund" },
+  item: { code: string; name: string; market: number; type: string },
 ) {
-  await ensureTables();
+  await ensureSeeded();
   const id = `${userId}-${item.type}-${item.code}`;
-  const { rows } = await sql`
-    INSERT INTO watchlist (id, user_id, code, name, market, type)
-    VALUES (${id}, ${userId}, ${item.code}, ${item.name}, ${item.market}, ${item.type})
-    ON CONFLICT (user_id, code, type) DO NOTHING
-    RETURNING id, user_id as "userId", code, name, market, type, added_at as "addedAt"
-  `;
-  if (rows.length > 0) return rows[0];
-  const existing = await sql`
-    SELECT id, user_id as "userId", code, name, market, type, added_at as "addedAt"
-    FROM watchlist WHERE user_id = ${userId} AND code = ${item.code} AND type = ${item.type}
-  `;
-  return existing.rows[0];
+  return prisma.watchlist.upsert({
+    where: { id },
+    create: { id, userId, code: item.code, name: item.name, market: item.market, type: item.type },
+    update: {},
+  });
 }
 
 export async function removeFromWatchlist(
   userId: string,
   code: string,
-  type: "stock" | "fund",
+  type: string,
 ) {
-  await ensureTables();
-  const { rowCount } = await sql`
-    DELETE FROM watchlist WHERE user_id = ${userId} AND code = ${code} AND type = ${type}
-  `;
-  return (rowCount ?? 0) > 0;
+  await ensureSeeded();
+  try {
+    await prisma.watchlist.deleteMany({ where: { userId, code, type } });
+    return true;
+  } catch {
+    return false;
+  }
 }
