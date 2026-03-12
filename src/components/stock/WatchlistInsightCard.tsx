@@ -234,7 +234,7 @@ export default function WatchlistInsightCard({ code, name, market, compact = fal
             <div style={{ width: "100%" }}>
               <Space style={{ width: "100%", justifyContent: "space-between" }}>
                 <Text strong>相关新闻汇总</Text>
-                <Link href={`/chat?stock=${data.code}`}>
+                <Link href={`/chat?stock=${data.code}&name=${encodeURIComponent(data.name)}`}>
                   <Button type="link" size="small">深度问AI</Button>
                 </Link>
               </Space>

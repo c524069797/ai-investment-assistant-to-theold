@@ -183,3 +183,16 @@ export async function updateChatSessionTitle(sessionId: string, title: string) {
     data: { title },
   });
 }
+
+export async function deleteChatSession(userId: string, sessionId: string) {
+  await ensureSeeded();
+  const session = await prisma.chatSession.findFirst({
+    where: { id: sessionId, userId },
+    select: { id: true },
+  });
+  if (!session) return false;
+
+  await prisma.chatMessage.deleteMany({ where: { sessionId } });
+  await prisma.chatSession.delete({ where: { id: sessionId } });
+  return true;
+}

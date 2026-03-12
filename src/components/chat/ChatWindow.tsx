@@ -2,9 +2,30 @@
 
 import { useChat } from "@ai-sdk/react";
 import { TextStreamChatTransport, type UIMessage } from "ai";
-import { Button, Input, List, Space, Spin, Tag, Typography, Empty, Card } from "antd";
-import { SendOutlined, RobotOutlined, PlusOutlined, MessageOutlined } from "@ant-design/icons";
+import {
+  Button,
+  Card,
+  Empty,
+  Input,
+  List,
+  Popconfirm,
+  Space,
+  Spin,
+  Tag,
+  Typography,
+} from "antd";
+import {
+  DeleteOutlined,
+  EditOutlined,
+  MessageOutlined,
+  PlusOutlined,
+  RobotOutlined,
+  SaveOutlined,
+  SearchOutlined,
+  SendOutlined,
+} from "@ant-design/icons";
 import { useRef, useEffect, useState, useMemo, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { useUser } from "@/lib/hooks/useUser";
 import MessageBubble from "./MessageBubble";
 
@@ -49,16 +70,28 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return json.data as T;
 }
 
+function buildStockPrompt(code: string, name?: string) {
+  const target = name ? `${name}（${code}）` : code;
+  return `请帮我系统分析一下${target}，重点看：1）技术面强弱；2）近7日相关新闻；3）支撑位、压力位、突破位；4）量能和主力行为；5）前一交易日是否上龙虎榜。`;
+}
+
+function buildStockSessionTitle(code: string, name?: string) {
+  return name ? `${name}分析` : `${code}分析`;
+}
+
 function ConversationPanel({
   sessionId,
   initialMessages,
+  initialPrompt,
   onConversationChange,
 }: {
   sessionId: string;
   initialMessages: UIMessage[];
+  initialPrompt?: string;
   onConversationChange: () => void;
 }) {
   const [input, setInput] = useState("");
+  const autoPromptSentRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const transport = useMemo(
@@ -83,6 +116,13 @@ function ConversationPanel({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isLoading]);
+
+  useEffect(() => {
+    if (initialPrompt && !autoPromptSentRef.current && initialMessages.length === 0) {
+      autoPromptSentRef.current = true;
+      sendMessage({ text: initialPrompt });
+    }
+  }, [initialPrompt, initialMessages.length, sendMessage]);
 
   const handleQuickQuestion = (question: string) => {
     sendMessage({ text: question });
@@ -188,12 +228,18 @@ function ConversationPanel({
 
 export default function ChatWindow() {
   const { currentUser, isLoading: userLoading } = useUser();
+  const searchParams = useSearchParams();
   const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [creatingSession, setCreatingSession] = useState(false);
+  const [searchKeyword, setSearchKeyword] = useState("");
+  const [editingSessionId, setEditingSessionId] = useState("");
+  const [editingTitle, setEditingTitle] = useState("");
+  const [pendingPrompt, setPendingPrompt] = useState("");
+  const handledStockRef = useRef("");
 
   const loadSessions = useCallback(async () => {
     if (!currentUser) return;
@@ -202,7 +248,7 @@ export default function ChatWindow() {
       const data = await fetchJson<ChatSessionSummary[]>("/api/chat/sessions");
       setSessions(data);
       if (data.length > 0) {
-        setSelectedSessionId((prev) => prev || data[0].id);
+        setSelectedSessionId((prev) => (prev && data.some((item) => item.id === prev) ? prev : data[0].id));
       } else {
         setSelectedSessionId("");
       }
@@ -211,21 +257,50 @@ export default function ChatWindow() {
     }
   }, [currentUser]);
 
-  const createSession = useCallback(async () => {
+  const createSession = useCallback(async (title?: string) => {
     setCreatingSession(true);
     try {
       const session = await fetchJson<ChatSessionSummary>("/api/chat/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify(title ? { title } : {}),
       });
       await loadSessions();
       setSelectedSessionId(session.id);
       setInitialMessages([]);
+      return session;
     } finally {
       setCreatingSession(false);
     }
   }, [loadSessions]);
+
+  const renameSession = useCallback(async (sessionId: string, title: string) => {
+    await fetchJson("/api/chat/sessions", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId, title }),
+    });
+    setEditingSessionId("");
+    setEditingTitle("");
+    await loadSessions();
+  }, [loadSessions]);
+
+  const removeSession = useCallback(async (sessionId: string) => {
+    await fetchJson(`/api/chat/sessions?sessionId=${encodeURIComponent(sessionId)}`, {
+      method: "DELETE",
+    });
+    const remaining = sessions.filter((item) => item.id !== sessionId);
+    setSessions(remaining);
+    if (selectedSessionId === sessionId) {
+      setSelectedSessionId(remaining[0]?.id ?? "");
+      setInitialMessages([]);
+    }
+    if (remaining.length === 0) {
+      await createSession();
+    } else {
+      await loadSessions();
+    }
+  }, [sessions, selectedSessionId, createSession, loadSessions]);
 
   useEffect(() => {
     if (!userLoading && currentUser) {
@@ -250,13 +325,42 @@ export default function ChatWindow() {
       .finally(() => setLoadingMessages(false));
   }, [selectedSessionId]);
 
+  useEffect(() => {
+    const stock = searchParams.get("stock") ?? "";
+    const stockName = searchParams.get("name") ?? "";
+    const stockKey = `${stock}-${stockName}`;
+    if (!stock || !currentUser || loadingSessions || creatingSession || handledStockRef.current === stockKey) {
+      return;
+    }
+
+    handledStockRef.current = stockKey;
+    createSession(buildStockSessionTitle(stock, stockName))
+      .then((session) => {
+        if (session) {
+          setSelectedSessionId(session.id);
+          setPendingPrompt(buildStockPrompt(stock, stockName));
+        }
+      })
+      .catch(() => {
+        handledStockRef.current = "";
+      });
+  }, [searchParams, currentUser, loadingSessions, creatingSession, createSession]);
+
+  const filteredSessions = useMemo(() => {
+    const keyword = searchKeyword.trim().toLowerCase();
+    if (!keyword) return sessions;
+    return sessions.filter((item) =>
+      item.title.toLowerCase().includes(keyword) || item.preview.toLowerCase().includes(keyword),
+    );
+  }, [sessions, searchKeyword]);
+
   if (userLoading) {
     return <div style={{ textAlign: "center", padding: 80 }}><Spin /></div>;
   }
 
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "280px minmax(0, 1fr)", gap: 16, padding: "0 16px 16px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "300px minmax(0, 1fr)", gap: 16, padding: "0 16px 16px" }}>
         <Card
           title="历史对话"
           extra={
@@ -267,18 +371,26 @@ export default function ChatWindow() {
           style={{ borderRadius: 16 }}
           styles={{ body: { padding: 12 } }}
         >
+          <Input
+            allowClear
+            prefix={<SearchOutlined />}
+            placeholder="搜索历史对话"
+            value={searchKeyword}
+            onChange={(e) => setSearchKeyword(e.target.value)}
+            style={{ marginBottom: 12 }}
+          />
+
           {loadingSessions ? (
             <div style={{ textAlign: "center", padding: 32 }}><Spin /></div>
-          ) : sessions.length === 0 ? (
-            <Empty description="暂无历史对话" />
+          ) : filteredSessions.length === 0 ? (
+            <Empty description={searchKeyword ? "没有匹配的对话" : "暂无历史对话"} />
           ) : (
             <List
-              dataSource={sessions}
+              dataSource={filteredSessions}
               renderItem={(item) => (
                 <List.Item
-                  onClick={() => setSelectedSessionId(item.id)}
                   style={{
-                    cursor: "pointer",
+                    display: "block",
                     borderRadius: 12,
                     padding: 12,
                     marginBottom: 8,
@@ -286,15 +398,59 @@ export default function ChatWindow() {
                     background: item.id === selectedSessionId ? "#f0f7ff" : "#fff",
                   }}
                 >
-                  <div style={{ width: "100%" }}>
-                    <Space style={{ width: "100%", justifyContent: "space-between" }}>
-                      <Text strong ellipsis>{item.title}</Text>
-                      <MessageOutlined style={{ color: "#8c8c8c" }} />
+                  {editingSessionId === item.id ? (
+                    <Space direction="vertical" style={{ width: "100%" }}>
+                      <Input
+                        value={editingTitle}
+                        onChange={(e) => setEditingTitle(e.target.value)}
+                        onPressEnter={() => renameSession(item.id, editingTitle.trim() || item.title)}
+                      />
+                      <Space>
+                        <Button size="small" type="primary" icon={<SaveOutlined />} onClick={() => renameSession(item.id, editingTitle.trim() || item.title)}>
+                          保存
+                        </Button>
+                        <Button size="small" onClick={() => { setEditingSessionId(""); setEditingTitle(""); }}>
+                          取消
+                        </Button>
+                      </Space>
                     </Space>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      {item.preview ? item.preview.slice(0, 28) : "继续你的投资问题"}
-                    </Text>
-                  </div>
+                  ) : (
+                    <div>
+                      <div
+                        onClick={() => setSelectedSessionId(item.id)}
+                        style={{ cursor: "pointer" }}
+                      >
+                        <Space style={{ width: "100%", justifyContent: "space-between" }}>
+                          <Text strong ellipsis style={{ maxWidth: 180 }}>{item.title}</Text>
+                          <MessageOutlined style={{ color: "#8c8c8c" }} />
+                        </Space>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {item.preview ? item.preview.slice(0, 32) : "继续你的投资问题"}
+                        </Text>
+                      </div>
+                      <Space style={{ marginTop: 8 }}>
+                        <Button
+                          size="small"
+                          icon={<EditOutlined />}
+                          onClick={() => {
+                            setEditingSessionId(item.id);
+                            setEditingTitle(item.title);
+                          }}
+                        >
+                          重命名
+                        </Button>
+                        <Popconfirm
+                          title="确定删除这条会话吗？"
+                          description="删除后无法恢复"
+                          onConfirm={() => removeSession(item.id)}
+                          okText="删除"
+                          cancelText="取消"
+                        >
+                          <Button size="small" danger icon={<DeleteOutlined />}>删除</Button>
+                        </Popconfirm>
+                      </Space>
+                    </div>
+                  )}
                 </List.Item>
               )}
             />
@@ -306,10 +462,14 @@ export default function ChatWindow() {
             <div style={{ textAlign: "center", padding: 80 }}><Spin /></div>
           ) : (
             <ConversationPanel
-              key={`${selectedSessionId}-${initialMessages.length}`}
+              key={`${selectedSessionId}-${initialMessages.length}-${pendingPrompt}`}
               sessionId={selectedSessionId}
               initialMessages={initialMessages}
-              onConversationChange={() => loadSessions()}
+              initialPrompt={pendingPrompt || undefined}
+              onConversationChange={() => {
+                setPendingPrompt("");
+                loadSessions();
+              }}
             />
           )
         ) : (
