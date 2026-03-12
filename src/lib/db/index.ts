@@ -101,3 +101,85 @@ export async function removeFromWatchlist(
     return false;
   }
 }
+
+// ---- Chat Operations ----
+
+export async function getChatSessions(userId: string) {
+  await ensureSeeded();
+  return prisma.chatSession.findMany({
+    where: { userId },
+    orderBy: { updatedAt: "desc" },
+    select: {
+      id: true,
+      title: true,
+      createdAt: true,
+      updatedAt: true,
+      messages: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { content: true, role: true },
+      },
+    },
+  });
+}
+
+export async function createChatSession(userId: string, title = "新对话") {
+  await ensureSeeded();
+  return prisma.chatSession.create({
+    data: {
+      id: `${userId}-chat-${Date.now()}`,
+      userId,
+      title,
+    },
+  });
+}
+
+export async function getChatSessionById(userId: string, sessionId: string) {
+  await ensureSeeded();
+  return prisma.chatSession.findFirst({
+    where: { id: sessionId, userId },
+  });
+}
+
+export async function getChatMessages(userId: string, sessionId: string) {
+  await ensureSeeded();
+  const session = await prisma.chatSession.findFirst({
+    where: { id: sessionId, userId },
+    select: {
+      id: true,
+      messages: {
+        orderBy: { createdAt: "asc" },
+        select: { id: true, role: true, content: true, createdAt: true },
+      },
+    },
+  });
+
+  return session?.messages ?? [];
+}
+
+export async function addChatMessage(sessionId: string, role: string, content: string) {
+  await ensureSeeded();
+  const message = await prisma.chatMessage.create({
+    data: {
+      id: `${sessionId}-${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      sessionId,
+      role,
+      content,
+    },
+  });
+
+  await prisma.chatSession.update({
+    where: { id: sessionId },
+    data: { updatedAt: new Date() },
+  });
+
+  return message;
+}
+
+export async function updateChatSessionTitle(sessionId: string, title: string) {
+  await ensureSeeded();
+  return prisma.chatSession.update({
+    where: { id: sessionId },
+    data: { title },
+  });
+}
