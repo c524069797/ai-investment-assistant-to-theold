@@ -5,6 +5,7 @@ import { Input, Typography, Row, Col, Card, Spin, Empty, Space, Button, Tag } fr
 import { SearchOutlined, ReloadOutlined, FireOutlined } from "@ant-design/icons";
 import { useStockSearch, useMarketIndices, useTopicStocks } from "@/lib/hooks/useStockData";
 import StockCard from "@/components/stock/StockCard";
+import { getTonghuashunIndexUrl } from "@/lib/utils/stock-links";
 
 const { Title, Paragraph, Text } = Typography;
 const { Search } = Input;
@@ -143,7 +144,7 @@ export default function StocksPage() {
           <Row gutter={[12, 12]}>
             {indices.map((idx) => (
               <Col xs={24} sm={12} md={8} key={idx.code}>
-                <StockCard stock={idx} />
+                <StockCard stock={idx} linkTo={getTonghuashunIndexUrl(idx.code)} />
               </Col>
             ))}
           </Row>

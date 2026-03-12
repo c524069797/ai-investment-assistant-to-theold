@@ -1,16 +1,16 @@
 "use client";
 
-import { Typography, Card, Button, Empty, message, Spin } from "antd";
-import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import { Typography, Card, Button, Empty, message, Spin, Space, Alert } from "antd";
+import { DeleteOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import Link from "next/link";
 import { useWatchlist } from "@/lib/hooks/useWatchlist";
 import { useUser } from "@/lib/hooks/useUser";
-import { useStockQuote } from "@/lib/hooks/useStockData";
 import useSWR from "swr";
-import { getPriceColor, formatPercent, formatPrice } from "@/styles/stock-colors";
 import type { FundEstimate } from "@/types/fund";
+import WatchlistInsightCard from "@/components/stock/WatchlistInsightCard";
+import { formatPercent, getPriceColor } from "@/styles/stock-colors";
 
-const { Title, Text } = Typography;
+const { Title, Text, Paragraph } = Typography;
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -18,45 +18,6 @@ const fetcher = async (url: string) => {
   if (!json.success) throw new Error(json.error);
   return json.data;
 };
-
-function StockWatchItem({ code, name, market, onRemove }: { code: string; name: string; market: number; onRemove: () => void }) {
-  const { data: quote, isLoading } = useStockQuote(market, code);
-
-  if (isLoading) {
-    return (
-      <Card size="small" loading style={{ marginBottom: 8 }} />
-    );
-  }
-
-  const price = quote?.price ?? 0;
-  const changePercent = quote?.changePercent ?? 0;
-  const color = getPriceColor(changePercent);
-
-  return (
-    <Card size="small" style={{ borderLeft: `4px solid ${color}`, marginBottom: 8 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Link href={`/stocks/${code}?market=${market}`} style={{ flex: 1 }}>
-          <div>
-            <Text strong style={{ fontSize: 17 }}>{name}</Text>
-            <Text type="secondary" style={{ marginLeft: 8 }}>{code}</Text>
-          </div>
-        </Link>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 20, fontWeight: 700, color }}>{formatPrice(price)}</div>
-            <Text style={{ color, fontSize: 14 }}>{formatPercent(changePercent)}</Text>
-          </div>
-          <Button
-            danger
-            icon={<DeleteOutlined />}
-            size="small"
-            onClick={(e) => { e.preventDefault(); onRemove(); }}
-          />
-        </div>
-      </div>
-    </Card>
-  );
-}
 
 function FundWatchItem({ code, name, onRemove }: { code: string; name: string; onRemove: () => void }) {
   const { data: estimate, isLoading } = useSWR<FundEstimate>(
@@ -88,12 +49,7 @@ function FundWatchItem({ code, name, onRemove }: { code: string; name: string; o
               <Text style={{ color, fontSize: 14 }}>估{formatPercent(changePercent)}</Text>
             </div>
           )}
-          <Button
-            danger
-            icon={<DeleteOutlined />}
-            size="small"
-            onClick={(e) => { e.preventDefault(); onRemove(); }}
-          />
+          <Button danger icon={<DeleteOutlined />} size="small" onClick={(e) => { e.preventDefault(); onRemove(); }} />
         </div>
       </div>
     </Card>
@@ -152,22 +108,46 @@ export default function WatchlistPage() {
 
   return (
     <div className="page-container">
-      <Title level={3}>{currentUser?.avatar ?? "⭐"} {userName}的自选</Title>
+      <Space direction="vertical" size={4} style={{ marginBottom: 16 }}>
+        <Title level={3} style={{ marginBottom: 0 }}>{currentUser?.avatar ?? "⭐"} {userName}的自选</Title>
+        <Paragraph style={{ marginBottom: 0, color: "#666" }}>
+          这里优先展示自选股的 AI 综合分析：相关新闻、量能变化、主力行为研判、压力位 / 支撑位 / 突破位，以及是否上榜龙虎榜。
+        </Paragraph>
+      </Space>
 
       {stocks.length > 0 && (
-        <Card title={`📈 自选股票 (${stocks.length})`} style={{ marginBottom: 16 }}>
-          {stocks.map((item) => (
-            <StockWatchItem
-              key={item.code}
-              code={item.code}
-              name={item.name}
-              market={item.market}
-              onRemove={() => {
-                removeItem(item.code, "stock");
-                message.success(`已移除 ${item.name}`);
-              }}
-            />
-          ))}
+        <Card
+          title={`📈 自选股票 AI 分析 (${stocks.length})`}
+          style={{ marginBottom: 16 }}
+          extra={<Button icon={<ReloadOutlined />} onClick={() => window.location.reload()}>刷新全部</Button>}
+        >
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message="当前版本优先使用定时刷新 + 手动刷新"
+            description="如果后续接入后端实时推送或 WebSocket，可升级为更即时的自选股监控模式。当前每张卡片支持独立刷新，并默认定时刷新；首页中的自选股分析默认收起，可按需展开。"
+          />
+          <div style={{ display: "grid", gap: 16 }}>
+            {stocks.map((item) => (
+              <div key={item.code} style={{ display: "grid", gap: 8 }}>
+                <WatchlistInsightCard code={item.code} name={item.name} market={item.market} />
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <Button
+                    danger
+                    icon={<DeleteOutlined />}
+                    size="small"
+                    onClick={() => {
+                      removeItem(item.code, "stock");
+                      message.success(`已移除 ${item.name}`);
+                    }}
+                  >
+                    移除自选
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
         </Card>
       )}
 

@@ -4,7 +4,7 @@ import { Card, Typography, Space } from "antd";
 import { RiseOutlined, FallOutlined } from "@ant-design/icons";
 import { getPriceColor, formatAmount, formatPercent, formatPrice } from "@/styles/stock-colors";
 import type { StockQuote, MarketIndex } from "@/types/stock";
-import Link from "next/link";
+
 
 const { Text, Title } = Typography;
 
@@ -69,7 +69,11 @@ export default function StockCard({ stock, linkTo }: StockCardProps) {
   );
 
   if (linkTo) {
-    return <Link href={linkTo}>{content}</Link>;
+    return (
+      <a href={linkTo} target="_blank" rel="noreferrer" style={{ display: "block" }}>
+        {content}
+      </a>
+    );
   }
 
   return content;

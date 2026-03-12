@@ -10,7 +10,6 @@ import {
   SafetyCertificateOutlined,
   AimOutlined,
   FundProjectionScreenOutlined,
-  BarChartOutlined,
   ArrowUpOutlined,
   ArrowDownOutlined,
   MinusOutlined,
@@ -19,14 +18,15 @@ import {
 import Link from "next/link";
 import useSWR from "swr";
 import { useMemo, useState } from "react";
-import { useMarketIndices, useStockQuote } from "@/lib/hooks/useStockData";
+import { useMarketIndices } from "@/lib/hooks/useStockData";
 import { useWatchlist } from "@/lib/hooks/useWatchlist";
 import StockCard from "@/components/stock/StockCard";
 import FundCard from "@/components/fund/FundCard";
 import type { FundEstimate } from "@/types/fund";
 import { STRATEGY_MODES, type StrategyMode } from "@/lib/constants/market";
 import { formatPercent, getPriceColor } from "@/styles/stock-colors";
-import AshareRadar from "@/components/dashboard/AshareRadar";
+import WatchlistInsightCard from "@/components/stock/WatchlistInsightCard";
+import { getTonghuashunIndexUrl } from "@/lib/utils/stock-links";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -45,81 +45,15 @@ export default function HomePage() {
   const [strategy, setStrategy] = useState<StrategyMode>("conservative");
 
   const currentStrategy = STRATEGY_MODES[strategy];
-  const marketStats = useMemo(() => {
-    if (!indices || indices.length === 0) {
-      return { upCount: 0, downCount: 0, flatCount: 0, avgChange: 0 };
-    }
-
-    const upCount = indices.filter((idx) => idx.changePercent > 0).length;
-    const downCount = indices.filter((idx) => idx.changePercent < 0).length;
-    const flatCount = indices.length - upCount - downCount;
-    const avgChange =
-      indices.reduce((sum, idx) => sum + idx.changePercent, 0) / indices.length;
-
-    return { upCount, downCount, flatCount, avgChange };
-  }, [indices]);
-
-  const avgColor = getPriceColor(marketStats.avgChange);
 
   return (
     <div className="page-container">
-      <Card className="dashboard-hero" style={{ marginBottom: 16 }}>
-        <Text className="hero-eyebrow">A股 · 交易驾驶舱</Text>
-        <Title level={2} className="hero-title">
-          AI 智能投资助手
-        </Title>
-        <Paragraph className="hero-subtitle">
-          由全球最先进的 AI 大模型驱动，为您提供 A 股沪深主板、创业板、科创板的实时行情追踪、智能技术分析、个股/基金深度解读与策略信号。AI 可理解复杂市场逻辑，辅助您做出更理性的投资决策。
-        </Paragraph>
-        <div className="hero-actions">
-          <Link href="/stocks">
-            <Button type="primary" size="large" icon={<BarChartOutlined />}>
-              查看实时行情
-            </Button>
-          </Link>
-          <Link href="/chat">
-            <Button size="large" icon={<RobotOutlined />}>
-              AI 智能分析
-            </Button>
-          </Link>
-        </div>
-      </Card>
+      <HeroSummary watchlist={watchlist} />
 
-      <Row gutter={[12, 12]} className="summary-grid" style={{ marginBottom: 16 }}>
-        <Col xs={12} md={6}>
-          <Card className="summary-card">
-            <Text className="summary-label">指数上涨数</Text>
-            <div className="summary-value up">{marketStats.upCount}</div>
-            <Text className="summary-trend">强势板块扩散</Text>
-          </Card>
-        </Col>
-        <Col xs={12} md={6}>
-          <Card className="summary-card">
-            <Text className="summary-label">指数下跌数</Text>
-            <div className="summary-value down">{marketStats.downCount}</div>
-            <Text className="summary-trend">注意回撤控制</Text>
-          </Card>
-        </Col>
-        <Col xs={12} md={6}>
-          <Card className="summary-card">
-            <Text className="summary-label">震荡指数</Text>
-            <div className="summary-value flat">{marketStats.flatCount}</div>
-            <Text className="summary-trend">等待方向确认</Text>
-          </Card>
-        </Col>
-        <Col xs={12} md={6}>
-          <Card className="summary-card">
-            <Text className="summary-label">指数均值涨跌</Text>
-            <div className="summary-value" style={{ color: avgColor }}>
-              {formatPercent(marketStats.avgChange)}
-            </div>
-            <Text className="summary-trend">盘面温度快照</Text>
-          </Card>
-        </Col>
-      </Row>
+      <WatchlistSummaryGrid watchlist={watchlist} />
 
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} lg={14}>
+        <Col xs={24} lg={12}>
           <Card>
             <div className="section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
@@ -137,7 +71,7 @@ export default function HomePage() {
               <Row gutter={[12, 12]}>
                 {indices.map((idx) => (
                   <Col xs={24} sm={12} key={idx.code}>
-                    <StockCard stock={idx} />
+                    <StockCard stock={idx} linkTo={getTonghuashunIndexUrl(idx.code)} />
                   </Col>
                 ))}
               </Row>
@@ -146,8 +80,29 @@ export default function HomePage() {
             )}
           </Card>
         </Col>
-        <Col xs={24} lg={10}>
-          <AshareRadar />
+        <Col xs={24} lg={12}>
+          <Card
+            title="⭐ 自选股总结"
+            extra={<Link href="/watchlist"><Button type="link">查看全部</Button></Link>}
+          >
+            {watchlist.filter((item) => item.type === "stock").length > 0 ? (
+              <div style={{ display: "grid", gap: 12 }}>
+                {watchlist
+                  .filter((item) => item.type === "stock")
+                  .slice(0, 2)
+                  .map((item) => (
+                    <WatchlistInsightCard key={`${item.type}-${item.code}`} code={item.code} name={item.name} market={item.market} compact />
+                  ))}
+              </div>
+            ) : (
+              <Alert
+                type="info"
+                showIcon
+                message="先添加自选股，首页才会展示 AI 深度分析"
+                description="当前版本会定时刷新自选股分析卡；若后续接入后端推送，可进一步升级为实时监控。"
+              />
+            )}
+          </Card>
         </Col>
       </Row>
 
@@ -227,15 +182,15 @@ export default function HomePage() {
 
       {watchlist.length > 0 && (
         <Card
-          title="⭐ 我的A股自选"
+          title="⭐ 我的自选股 AI 分析"
           extra={<Link href="/watchlist"><Button type="link">查看全部</Button></Link>}
           style={{ marginBottom: 16 }}
         >
           <Row gutter={[12, 12]}>
             {watchlist.slice(0, 4).map((item) => (
-              <Col xs={24} sm={12} key={`${item.type}-${item.code}`}>
+              <Col xs={24} key={`${item.type}-${item.code}`}>
                 {item.type === "stock" ? (
-                  <WatchlistStockPreview code={item.code} name={item.name} market={item.market} />
+                  <WatchlistInsightCard code={item.code} name={item.name} market={item.market} compact />
                 ) : (
                   <WatchlistFundPreview code={item.code} name={item.name} />
                 )}
@@ -258,35 +213,168 @@ export default function HomePage() {
 
 // --- Watchlist preview components with real-time data ---
 
+interface WatchlistInsightSummary {
+  code: string;
+  name: string;
+  market: number;
+  changePercent: number;
+  volumeRatio: number;
+  concept: string;
+  dragonTiger: { isOnList: boolean };
+  news: Array<{ date: string }>;
+  breakoutLevels: Array<{ price: number }>;
+  pressureLevels: Array<{ price: number }>;
+}
+
+function useWatchlistSummaryData(watchlist: Array<{ code: string; name: string; market: number; type: string }>) {
+  const stockItems = watchlist.filter((item) => item.type === "stock").slice(0, 6);
+  const summaryKey = stockItems.length > 0
+    ? `/api/stocks?action=watchlist-summary&items=${encodeURIComponent(JSON.stringify(stockItems.map((item) => ({ code: item.code, name: item.name, market: item.market }))))}`
+    : null;
+
+  const { data, isLoading } = useSWR<WatchlistInsightSummary[]>(summaryKey, watchlistFetcher, {
+    refreshInterval: 60000,
+  });
+
+  const summary = useMemo(() => {
+    if (!data || data.length === 0) {
+      return {
+        stockCount: stockItems.length,
+        upCount: 0,
+        downCount: 0,
+        strongCount: 0,
+        dragonTigerCount: 0,
+        newsCount: 0,
+        topGainer: null as WatchlistInsightSummary | null,
+        topLoser: null as WatchlistInsightSummary | null,
+        strongestNames: "暂无",
+        heroText: "先添加自选股，首页才会自动生成今日自选股分析结果。",
+        focusText: "先添加自选股后，这里会自动生成今日自选股总结。",
+      };
+    }
+
+    const upCount = data.filter((item) => item.changePercent > 0).length;
+    const downCount = data.filter((item) => item.changePercent < 0).length;
+    const strongCount = data.filter((item) => item.changePercent > 0).length;
+    const dragonTigerCount = data.filter((item) => item.dragonTiger.isOnList).length;
+    const newsCount = data.reduce((sum, item) => sum + item.news.length, 0);
+    const topGainer = [...data].sort((a, b) => b.changePercent - a.changePercent)[0] ?? null;
+    const topLoser = [...data].sort((a, b) => a.changePercent - b.changePercent)[0] ?? null;
+    const strongestNames = data
+      .filter((item) => item.changePercent > 0)
+      .sort((a, b) => b.changePercent - a.changePercent)
+      .slice(0, 2)
+      .map((item) => `${item.name} ${formatPercent(item.changePercent)}`)
+      .join("，") || "暂无偏强个股";
+
+    const sorted = [...data].sort((a, b) => {
+      const scoreA = (a.dragonTiger.isOnList ? 100 : 0) + a.news.length * 10 + a.volumeRatio * 5 + Math.max(a.changePercent, 0);
+      const scoreB = (b.dragonTiger.isOnList ? 100 : 0) + b.news.length * 10 + b.volumeRatio * 5 + Math.max(b.changePercent, 0);
+      return scoreB - scoreA;
+    });
+
+    const focus = sorted[0];
+    const heroText = `你的自选股今天 ${upCount} 涨 ${downCount} 跌${topGainer ? `，涨得最多是 ${topGainer.name} ${formatPercent(topGainer.changePercent)}` : ""}${topLoser ? `，跌得最多是 ${topLoser.name} ${formatPercent(topLoser.changePercent)}` : ""}。${focus ? `当前优先关注 ${focus.name}` : ""}${focus?.dragonTiger.isOnList ? "，它出现在前一交易日龙虎榜" : ""}${focus && focus.news.length > 0 ? `，近7日有 ${focus.news.length} 条新闻。` : "。"}`;
+    const focusText = focus
+      ? `${focus.name}（${focus.concept}）当前优先级最高${focus.dragonTiger.isOnList ? "，前一交易日上榜龙虎榜" : ""}${focus.news.length > 0 ? `，近7日有 ${focus.news.length} 条新闻` : ""}。`
+      : "今日暂无明显优先盯盘标的。";
+
+    return {
+      stockCount: stockItems.length,
+      upCount,
+      downCount,
+      strongCount,
+      dragonTigerCount,
+      newsCount,
+      topGainer,
+      topLoser,
+      strongestNames,
+      heroText,
+      focusText,
+    };
+  }, [data, stockItems.length]);
+
+  return { stockItems, data, isLoading, summary };
+}
+
+function HeroSummary({ watchlist }: { watchlist: Array<{ code: string; name: string; market: number; type: string }> }) {
+  const { summary } = useWatchlistSummaryData(watchlist);
+
+  return (
+    <Card
+      style={{
+        marginBottom: 16,
+        borderRadius: 22,
+        border: "1px solid #0f172a0f",
+        background: "linear-gradient(135deg, #0b1220 0%, #18263f 45%, #273b5f 100%)",
+        boxShadow: "0 20px 36px rgba(15, 23, 42, 0.22)",
+      }}
+      styles={{ body: { padding: 28 } }}
+    >
+      <Text style={{ color: "#c3d3f4", fontSize: 13, letterSpacing: "0.08em", textTransform: "uppercase" }}>A股 · 我的自选股 AI 决策台</Text>
+      <Title level={2} style={{ color: "#fff", margin: "6px 0", lineHeight: 1.25 }}>爸爸的a股智能分析</Title>
+      <Paragraph style={{ color: "#d2deef", marginBottom: 18, fontSize: 16 }}>
+        {summary.heroText}
+      </Paragraph>
+      <div className="hero-actions">
+        <Link href="/watchlist">
+          <Button type="primary" size="large" icon={<StarOutlined />}>
+            查看自选股分析
+          </Button>
+        </Link>
+        <Link href="/chat">
+          <Button size="large" icon={<RobotOutlined />}>
+            深度问AI
+          </Button>
+        </Link>
+      </div>
+    </Card>
+  );
+}
+
+function WatchlistSummaryGrid({ watchlist }: { watchlist: Array<{ code: string; name: string; market: number; type: string }> }) {
+  const { stockItems, isLoading, summary } = useWatchlistSummaryData(watchlist);
+
+  return (
+    <Row gutter={[12, 12]} className="summary-grid" style={{ marginBottom: 16 }}>
+      <Col xs={12} md={6}>
+        <Card className="summary-card">
+          <Text className="summary-label">自选股数量</Text>
+          <div className="summary-value">{stockItems.length}</div>
+          <Text className="summary-trend">今日跟踪池</Text>
+        </Card>
+      </Col>
+      <Col xs={12} md={6}>
+        <Card className="summary-card">
+          <Text className="summary-label">偏强个股</Text>
+          <div className="summary-value up">{isLoading ? "-" : summary.strongCount}</div>
+          <Text className="summary-trend">{summary.strongestNames}</Text>
+        </Card>
+      </Col>
+      <Col xs={12} md={6}>
+        <Card className="summary-card">
+          <Text className="summary-label">龙虎榜关注</Text>
+          <div className="summary-value" style={{ color: "#d48806" }}>{isLoading ? "-" : summary.dragonTigerCount}</div>
+          <Text className="summary-trend">以前一交易日为准</Text>
+        </Card>
+      </Col>
+      <Col xs={12} md={6}>
+        <Card className="summary-card">
+          <Text className="summary-label">近7日新闻</Text>
+          <div className="summary-value" style={{ color: "#1677ff" }}>{isLoading ? "-" : summary.newsCount}</div>
+          <Text className="summary-trend">{summary.focusText}</Text>
+        </Card>
+      </Col>
+    </Row>
+  );
+}
+
 const watchlistFetcher = async (url: string) => {
   const res = await fetch(url);
   const json = await res.json();
   if (!json.success) throw new Error(json.error);
   return json.data;
 };
-
-function WatchlistStockPreview({ code, name, market }: { code: string; name: string; market: number }) {
-  const { data: quote, isLoading } = useStockQuote(market, code);
-
-  if (isLoading) {
-    return <Card size="small" loading />;
-  }
-
-  return (
-    <StockCard
-      stock={{
-        code,
-        name: quote?.name ?? name,
-        price: quote?.price ?? 0,
-        change: quote?.change ?? 0,
-        changePercent: quote?.changePercent ?? 0,
-        volume: quote?.volume ?? 0,
-        amount: quote?.amount ?? 0,
-      }}
-      linkTo={`/stocks/${code}?market=${market}`}
-    />
-  );
-}
 
 function WatchlistFundPreview({ code, name }: { code: string; name: string }) {
   const { data: estimate, isLoading } = useSWR<FundEstimate>(

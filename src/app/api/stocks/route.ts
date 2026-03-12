@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
 import {
   fetchStockQuote,
   searchStocks,
@@ -7,6 +9,7 @@ import {
   fetchMarketIndices,
   fetchStockRanking,
 } from "@/lib/api/eastmoney";
+import type { StockKLinePoint } from "@/types/stock";
 import type { StockRankingItem } from "@/types/stock";
 
 export async function GET(request: NextRequest) {
@@ -92,8 +95,6 @@ export async function GET(request: NextRequest) {
               // Recent high/low (20-day and 60-day)
               const recent20High = Math.max(...highs.slice(-20));
               const recent20Low = Math.min(...lows.slice(-20));
-              const recent60High = Math.max(...highs.slice(-60));
-              const recent60Low = Math.min(...lows.slice(-60));
 
               // Volume trend
               const avgVol10 = volumes.slice(-10).reduce((a, b) => a + b, 0) / 10;
@@ -260,6 +261,47 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ success: true, data: sorted });
       }
 
+      case "watchlist-summary": {
+        const rawItems = searchParams.get("items") ?? "[]";
+        const items = JSON.parse(rawItems) as Array<{ market: number; code: string; name?: string }>;
+        const limitedItems = items.slice(0, 6);
+
+        const data = await Promise.all(
+          limitedItems.map(async ({ market, code, name }) => {
+            const quote = await fetchStockQuote(market, code);
+            const kline = await fetchStockKLine(market, code, "daily", 80);
+            const [news, dragonTiger, conceptInfo] = await Promise.all([
+              fetchWatchlistNews(code, name || quote.name),
+              fetchDragonTigerInfo(code),
+              fetchStockConceptInfo(market, code),
+            ]);
+            return buildWatchlistInsight(quote, kline, news, dragonTiger, conceptInfo);
+          }),
+        );
+
+        return NextResponse.json({ success: true, data });
+      }
+
+      case "watchlist-insight": {
+        const market = parseInt(searchParams.get("market") ?? "1", 10);
+        const code = searchParams.get("code") ?? "";
+        const name = searchParams.get("name") ?? "";
+        if (!code) {
+          return NextResponse.json({ error: "Missing code" }, { status: 400 });
+        }
+
+        const quote = await fetchStockQuote(market, code);
+        const kline = await fetchStockKLine(market, code, "daily", 80);
+        const [news, dragonTiger, conceptInfo] = await Promise.all([
+          fetchWatchlistNews(code, name || quote.name),
+          fetchDragonTigerInfo(code),
+          fetchStockConceptInfo(market, code),
+        ]);
+
+        const insight = buildWatchlistInsight(quote, kline, news, dragonTiger, conceptInfo);
+        return NextResponse.json({ success: true, data: insight });
+      }
+
       default:
         return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
@@ -360,4 +402,271 @@ function calcBollinger(closes: number[], period = 20) {
 function calcMA(closes: number[], period: number): number | null {
   if (closes.length < period) return null;
   return closes.slice(-period).reduce((a, b) => a + b, 0) / period;
+}
+
+interface WatchlistNewsItem {
+  title: string;
+  date: string;
+  source: string;
+  sentiment: "positive" | "negative" | "neutral";
+}
+
+interface DragonTigerInfo {
+  isOnList: boolean;
+  tradeDate?: string;
+  reason?: string;
+  netBuy?: number;
+  buyAmount?: number;
+  sellAmount?: number;
+}
+
+interface StockConceptInfo {
+  concept: string;
+  region: string;
+}
+
+function normalizeNewsDate(value: string) {
+  return value ? value.replace(" 00:00:00", "") : "";
+}
+
+function isWithinDays(value: string, days: number) {
+  if (!value) return false;
+  const ts = new Date(value.replace(/-/g, "/")).getTime();
+  if (Number.isNaN(ts)) return false;
+  return Date.now() - ts <= days * 24 * 60 * 60 * 1000;
+}
+
+function inferNewsSentiment(title: string): "positive" | "negative" | "neutral" {
+  const positiveWords = ["增长", "中标", "回购", "签约", "突破", "利好", "增持", "预增", "上涨", "扩产", "合作"];
+  const negativeWords = ["减持", "下滑", "问询", "亏损", "处罚", "风险", "暴跌", "终止", "减值", "违约", "诉讼"];
+
+  if (positiveWords.some((word) => title.includes(word))) return "positive";
+  if (negativeWords.some((word) => title.includes(word))) return "negative";
+  return "neutral";
+}
+
+function extractNewsFromResult(json: Record<string, unknown>): WatchlistNewsItem[] {
+  const articles =
+    (json as { result?: { cmsArticleWebOld?: Array<Record<string, string>> } })?.result?.cmsArticleWebOld ?? [];
+
+  return articles
+    .map((article) => {
+      const title = (article.title ?? "").replace(/<[^>]+>/g, "");
+      const date = normalizeNewsDate(article.date ?? article.showTime ?? "");
+      return {
+        title,
+        date,
+        source: article.mediaName ?? article.source ?? "东方财富",
+        sentiment: inferNewsSentiment(title),
+      };
+    })
+    .filter((article) => isWithinDays(article.date, 7))
+    .slice(0, 6);
+}
+
+async function fetchWatchlistNews(code: string, stockName: string): Promise<WatchlistNewsItem[]> {
+  const urls = [
+    `https://search-api-web.eastmoney.com/search/jsonp?cb=&param=%7B%22uid%22%3A%22%22%2C%22keyword%22%3A%22${code}%22%2C%22type%22%3A%5B%22cmsArticleWebOld%22%5D%2C%22client%22%3A%22web%22%2C%22clientType%22%3A%22web%22%2C%22clientVersion%22%3A%22curr%22%2C%22param%22%3A%7B%22cmsArticleWebOld%22%3A%7B%22searchScope%22%3A%22default%22%2C%22sort%22%3A%22default%22%2C%22pageIndex%22%3A1%2C%22pageSize%22%3A4%2C%22preTag%22%3A%22%22%2C%22postTag%22%3A%22%22%7D%7D%7D`,
+    `https://search-api-web.eastmoney.com/search/jsonp?cb=&param=%7B%22uid%22%3A%22%22%2C%22keyword%22%3A%22${encodeURIComponent(stockName)}%22%2C%22type%22%3A%5B%22cmsArticleWebOld%22%5D%2C%22client%22%3A%22web%22%2C%22clientType%22%3A%22web%22%2C%22clientVersion%22%3A%22curr%22%2C%22param%22%3A%7B%22cmsArticleWebOld%22%3A%7B%22searchScope%22%3A%22default%22%2C%22sort%22%3A%22default%22%2C%22pageIndex%22%3A1%2C%22pageSize%22%3A4%2C%22preTag%22%3A%22%22%2C%22postTag%22%3A%22%22%7D%7D%7D`,
+  ];
+
+  const responses = await Promise.all(
+    urls.map(async (url) => {
+      try {
+        const res = await fetch(url, {
+          headers: {
+            Referer: "https://so.eastmoney.com/",
+            "User-Agent": "Mozilla/5.0",
+          },
+          cache: "no-store",
+        });
+        const text = await res.text();
+        const jsonStr = text.replace(/^[^(]*\(/, "").replace(/\);?\s*$/, "");
+        const json = jsonStr !== text ? JSON.parse(jsonStr) : JSON.parse(text);
+        return extractNewsFromResult(json);
+      } catch {
+        return [] as WatchlistNewsItem[];
+      }
+    }),
+  );
+
+  const merged = [...responses[0]];
+  for (const item of responses[1]) {
+    if (!merged.some((news) => news.title === item.title)) {
+      merged.push(item);
+    }
+  }
+  return merged.slice(0, 6);
+}
+
+async function fetchStockConceptInfo(market: number, code: string): Promise<StockConceptInfo> {
+  try {
+    const secid = `${market}.${code}`;
+    const url = `https://push2.eastmoney.com/api/qt/stock/get?secid=${secid}&fields=f57,f58,f127,f128`;
+    const res = await fetch(url, {
+      headers: { Referer: "https://quote.eastmoney.com/" },
+      cache: "no-store",
+    });
+    const json = await res.json();
+    const data = (json as { data?: Record<string, string> }).data ?? {};
+    return {
+      concept: data.f127 || "概念待识别",
+      region: data.f128 || "地域待识别",
+    };
+  } catch {
+    return { concept: "概念待识别", region: "地域待识别" };
+  }
+}
+
+async function fetchDragonTigerInfo(code: string): Promise<DragonTigerInfo> {
+  try {
+    const latestDateUrl = "https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_BILLBOARD_DAILYDETAILS&columns=TRADE_DATE&sortTypes=-1&sortColumns=TRADE_DATE&pageNumber=1&pageSize=1&source=WEB&client=WEB";
+    const stockUrl = `https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_BILLBOARD_DAILYDETAILS&columns=SECURITY_CODE,TRADE_DATE,EXPLANATION,TOTAL_BUY,TOTAL_SELL,TOTAL_NET&filter=(SECURITY_CODE%3D%22${code}%22)&pageNumber=1&pageSize=1&sortTypes=-1&sortColumns=TRADE_DATE&source=WEB&client=WEB`;
+
+    const [latestDateRes, stockRes] = await Promise.all([
+      fetch(latestDateUrl, {
+        headers: { Referer: "https://data.eastmoney.com/" },
+        cache: "no-store",
+      }),
+      fetch(stockUrl, {
+        headers: { Referer: "https://data.eastmoney.com/" },
+        cache: "no-store",
+      }),
+    ]);
+
+    const latestJson = await latestDateRes.json();
+    const stockJson = await stockRes.json();
+
+    const latestDate = String((latestJson as { result?: { data?: Array<Record<string, string>> } })?.result?.data?.[0]?.TRADE_DATE ?? "").replace(" 00:00:00", "");
+    const row = (stockJson as { result?: { data?: Array<Record<string, string | number>> } })?.result?.data?.[0];
+    if (!row || !latestDate) return { isOnList: false };
+
+    const tradeDate = String(row.TRADE_DATE ?? "").replace(" 00:00:00", "");
+    if (tradeDate !== latestDate || !isWithinDays(tradeDate, 4)) {
+      return { isOnList: false };
+    }
+
+    return {
+      isOnList: true,
+      tradeDate,
+      reason: String(row.EXPLANATION ?? "上榜原因待确认"),
+      netBuy: Number(row.TOTAL_NET ?? 0),
+      buyAmount: Number(row.TOTAL_BUY ?? 0),
+      sellAmount: Number(row.TOTAL_SELL ?? 0),
+    };
+  } catch {
+    return { isOnList: false };
+  }
+}
+
+function buildWatchlistInsight(
+  quote: Awaited<ReturnType<typeof fetchStockQuote>>,
+  kline: StockKLinePoint[],
+  news: WatchlistNewsItem[],
+  dragonTiger: DragonTigerInfo,
+  conceptInfo: StockConceptInfo,
+) {
+  const closes = kline.map((item) => item.close);
+  const highs = kline.map((item) => item.high);
+  const lows = kline.map((item) => item.low);
+  const volumes = kline.map((item) => item.volume);
+  const currentPrice = quote.price;
+  const ma5 = calcMA(closes, 5) ?? currentPrice;
+  const ma10 = calcMA(closes, 10) ?? currentPrice;
+  const ma20 = calcMA(closes, 20) ?? currentPrice;
+  const ma60 = calcMA(closes, 60) ?? currentPrice;
+  const avgVolume5 = volumes.length >= 5 ? volumes.slice(-5).reduce((sum, val) => sum + val, 0) / 5 : quote.volume;
+  const avgVolume20 = volumes.length >= 20 ? volumes.slice(-20).reduce((sum, val) => sum + val, 0) / 20 : quote.volume;
+  const volumeRatio = avgVolume20 > 0 ? quote.volume / avgVolume20 : 1;
+  const recent20High = highs.length >= 20 ? Math.max(...highs.slice(-20)) : quote.high;
+  const recent20Low = lows.length >= 20 ? Math.min(...lows.slice(-20)) : quote.low;
+  const boll = calcBollinger(closes, 20);
+
+  const pressureLevels = [
+    ma5 > currentPrice ? { price: ma5, reason: "5日均线压力" } : null,
+    ma10 > currentPrice ? { price: ma10, reason: "10日均线压力" } : null,
+    ma20 > currentPrice ? { price: ma20, reason: "20日均线压力" } : null,
+    recent20High > currentPrice ? { price: recent20High, reason: "20日高点压力" } : null,
+    boll && boll.upper > currentPrice ? { price: boll.upper, reason: "布林上轨压力" } : null,
+  ].filter((item): item is { price: number; reason: string } => Boolean(item)).sort((a, b) => a.price - b.price).slice(0, 3);
+
+  const supportLevels = [
+    ma5 < currentPrice ? { price: ma5, reason: "5日均线支撑" } : null,
+    ma10 < currentPrice ? { price: ma10, reason: "10日均线支撑" } : null,
+    ma20 < currentPrice ? { price: ma20, reason: "20日均线支撑" } : null,
+    ma60 < currentPrice ? { price: ma60, reason: "60日均线支撑" } : null,
+    recent20Low < currentPrice ? { price: recent20Low, reason: "20日低点支撑" } : null,
+    boll && boll.lower < currentPrice ? { price: boll.lower, reason: "布林下轨支撑" } : null,
+  ].filter((item): item is { price: number; reason: string } => Boolean(item)).sort((a, b) => b.price - a.price).slice(0, 3);
+
+  const breakoutLevels = [
+    { price: recent20High, reason: "突破20日高点确认强势" },
+    { price: Math.max(ma20, ma10), reason: "站稳中期均线有助延续反弹" },
+  ].filter((item) => item.price >= currentPrice * 0.98).sort((a, b) => a.price - b.price).slice(0, 2);
+
+  const newsSummary = news.length > 0
+    ? `近7天收集到 ${news.length} 条相关新闻，其中${news.filter((item) => item.sentiment === "positive").length} 条偏利多。`
+    : "近7天未抓取到显著相关新闻，更多依赖量价和技术位置判断。";
+
+  const signalSummary = [
+    `${conceptInfo.concept} / ${conceptInfo.region}`,
+    quote.changePercent > 0 ? "股价当日偏强" : quote.changePercent < 0 ? "股价承压波动" : "股价平盘震荡",
+    volumeRatio > 1.5 ? "伴随明显放量" : volumeRatio < 0.8 ? "成交偏谨慎" : "量能处于常态区间",
+    dragonTiger.isOnList ? "且出现前一交易日龙虎榜事件催化" : "当前未出现前一交易日龙虎榜强化信号",
+    newsSummary,
+  ].join("，");
+
+  let strategyHint = "以观察为主，等待更明确的放量突破或回踩确认。";
+  if (dragonTiger.isOnList && Number(dragonTiger.netBuy ?? 0) > 0) {
+    strategyHint = "龙虎榜净买入偏正，若后续放量站稳关键压力位，可提高关注级别。";
+  } else if (quote.changePercent > 2 && volumeRatio > 1.5) {
+    strategyHint = "短线进入放量突破观察区，避免追高，优先等待回踩或二次确认。";
+  } else if (quote.changePercent < -2) {
+    strategyHint = "短线偏弱，先观察支撑位承接，不宜急于抄底。";
+  }
+
+  const volumeNote = volumeRatio > 1.8
+    ? "当日成交量显著高于20日均量，市场关注度快速抬升。"
+    : volumeRatio > 1.2
+      ? "量能温和放大，说明资金开始回流。"
+      : volumeRatio < 0.8
+        ? "成交缩量，说明场内资金偏观望。"
+        : "量能相对平稳，尚未出现极端异动。";
+
+  const largeOrderNote = dragonTiger.isOnList
+    ? `龙虎榜数据显示净买入 ${formatLargeAmount(dragonTiger.netBuy ?? 0)}，可视作大资金行为的重要参考。`
+    : quote.amount > 1500000000
+      ? "成交额较高，盘中可能存在大资金换手或分歧博弈。"
+      : "暂未捕捉到足够明确的大单席位信息，需结合后续盘口继续观察。";
+
+  return {
+    code: quote.code,
+    name: quote.name,
+    market: quote.market,
+    concept: conceptInfo.concept,
+    region: conceptInfo.region,
+    price: quote.price,
+    change: quote.change,
+    changePercent: quote.changePercent,
+    turnoverRate: quote.turnoverRate,
+    amount: quote.amount,
+    volumeRatio,
+    avgVolume5,
+    avgVolume20,
+    pressureLevels,
+    supportLevels,
+    breakoutLevels,
+    signalSummary,
+    strategyHint,
+    volumeNote,
+    largeOrderNote,
+    dragonTiger,
+    news,
+  };
+}
+
+function formatLargeAmount(value: number) {
+  if (Math.abs(value) >= 100000000) return `${(value / 100000000).toFixed(2)}亿`;
+  if (Math.abs(value) >= 10000) return `${(value / 10000).toFixed(2)}万`;
+  return value.toFixed(0);
 }

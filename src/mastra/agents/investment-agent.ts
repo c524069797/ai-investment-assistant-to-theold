@@ -160,6 +160,11 @@ export const INVESTMENT_AGENT_INSTRUCTIONS = `你是一位专业的 AI 投资助
 - 如果用户问到你不确定的信息，请诚实说明
 - 解释技术指标时多用生活化比喻，如"布林线像弹性围栏"、"MACD像跑车和货车赛跑"`;
 
+function normalizeBaseUrl(url?: string) {
+  if (!url) return "https://ai.muapi.cn/v1";
+  return url.endsWith("/v1") ? url : `${url.replace(/\/$/, "")}/v1`;
+}
+
 export const investmentAgent = new Agent({
   id: "investment-agent",
   name: "investment-agent",
@@ -167,9 +172,9 @@ export const investmentAgent = new Agent({
   model: () => {
     const provider = createOpenAI({
       apiKey: process.env.OPENAI_API_KEY!,
-      baseURL: process.env.OPENAI_BASE_URL || "https://ai.muapi.cn/v1",
+      baseURL: normalizeBaseUrl(process.env.OPENAI_BASE_URL),
     });
-    return provider.chat("gpt-5.2");
+    return provider.chat(process.env.OPENAI_MODEL || "gpt-5.2");
   },
   tools: {
     stockLookup: stockLookupTool,
