@@ -138,6 +138,7 @@ function ConversationPanel({
 
   return (
     <div
+      className="chat-conversation-panel"
       style={{
         display: "flex",
         flexDirection: "column",
@@ -150,6 +151,7 @@ function ConversationPanel({
     >
       <div
         ref={scrollRef}
+        className="chat-messages-area"
         style={{
           flex: 1,
           overflow: "auto",
@@ -360,7 +362,7 @@ export default function ChatWindow() {
 
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "300px minmax(0, 1fr)", gap: 16, padding: "0 16px 16px" }}>
+      <div className="chat-layout" style={{ display: "grid", gridTemplateColumns: "300px minmax(0, 1fr)", gap: 16, padding: "0 16px 16px" }}>
         <Card
           title="历史对话"
           extra={
@@ -368,6 +370,7 @@ export default function ChatWindow() {
               新建
             </Button>
           }
+          className="chat-sidebar-card"
           style={{ borderRadius: 16 }}
           styles={{ body: { padding: 12 } }}
         >

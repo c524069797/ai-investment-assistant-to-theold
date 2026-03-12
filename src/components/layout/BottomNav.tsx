@@ -60,7 +60,7 @@ export default function BottomNav() {
               alignItems: "center",
               gap: 2,
               color: isActive ? "#2b56c2" : "#7f889d",
-              fontSize: 12,
+              fontSize: 11,
               textDecoration: "none",
               padding: "4px 8px",
               minWidth: 48,

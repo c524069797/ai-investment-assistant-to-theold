@@ -18,22 +18,8 @@ export default function AppHeader() {
   const { currentUser, logout } = useUser();
 
   return (
-    <Header
-      style={{
-        background: "rgba(255, 255, 255, 0.88)",
-        backdropFilter: "blur(10px)",
-        borderBottom: "1px solid #e8edf4",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "0 16px",
-        position: "sticky",
-        top: 0,
-        zIndex: 100,
-        height: 64,
-      }}
-    >
-      <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <Header className="app-header">
+      <Link href="/" className="app-header-brand">
         <StockOutlined style={{ fontSize: 28, color: "#2b56c2" }} />
         <div>
           <Title level={5} style={{ margin: 0, color: "#1f2d4a", lineHeight: 1.2 }}>
@@ -42,10 +28,10 @@ export default function AppHeader() {
           <span style={{ fontSize: 12, color: "#6d7891" }}>A股版</span>
         </div>
       </Link>
-      <Space size={8}>
+      <Space size={8} wrap className="app-header-actions">
         {currentUser && (
           <>
-            <span style={{ fontWeight: 600, fontSize: 15 }}>
+            <span className="app-header-user" style={{ fontWeight: 600, fontSize: 15 }}>
               {currentUser.avatar} {currentUser.name}
             </span>
             <Button
@@ -61,7 +47,7 @@ export default function AppHeader() {
         <Button size="small" onClick={decrease} style={{ borderRadius: 10 }}>
           A-
         </Button>
-        <FontSizeOutlined style={{ fontSize: 18, color: "#4860a8" }} />
+        <FontSizeOutlined className="app-header-font-icon" style={{ fontSize: 18, color: "#4860a8" }} />
         <Button size="small" onClick={increase} style={{ borderRadius: 10 }}>
           A+
         </Button>
