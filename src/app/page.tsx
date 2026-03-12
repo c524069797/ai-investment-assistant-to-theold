@@ -20,6 +20,7 @@ import useSWR from "swr";
 import { useMemo, useState } from "react";
 import { useMarketIndices } from "@/lib/hooks/useStockData";
 import { useWatchlist } from "@/lib/hooks/useWatchlist";
+import { useUser } from "@/lib/hooks/useUser";
 import StockCard from "@/components/stock/StockCard";
 import FundCard from "@/components/fund/FundCard";
 import type { FundEstimate } from "@/types/fund";
@@ -42,13 +43,14 @@ const ACTION_ENTRIES = [
 export default function HomePage() {
   const { data: indices, isLoading: indicesLoading, mutate: mutateIndices } = useMarketIndices();
   const { items: watchlist } = useWatchlist();
+  const { currentUser } = useUser();
   const [strategy, setStrategy] = useState<StrategyMode>("conservative");
 
   const currentStrategy = STRATEGY_MODES[strategy];
 
   return (
     <div className="page-container">
-      <HeroSummary watchlist={watchlist} />
+      <HeroSummary watchlist={watchlist} userName={currentUser?.name ?? "当前"} />
 
       <WatchlistSummaryGrid watchlist={watchlist} />
 
@@ -297,7 +299,7 @@ function useWatchlistSummaryData(watchlist: Array<{ code: string; name: string; 
   return { stockItems, data, isLoading, summary };
 }
 
-function HeroSummary({ watchlist }: { watchlist: Array<{ code: string; name: string; market: number; type: string }> }) {
+function HeroSummary({ watchlist, userName }: { watchlist: Array<{ code: string; name: string; market: number; type: string }>; userName: string }) {
   const { summary } = useWatchlistSummaryData(watchlist);
 
   return (
@@ -312,7 +314,7 @@ function HeroSummary({ watchlist }: { watchlist: Array<{ code: string; name: str
       styles={{ body: { padding: 28 } }}
     >
       <Text style={{ color: "#c3d3f4", fontSize: 13, letterSpacing: "0.08em", textTransform: "uppercase" }}>A股 · 我的自选股 AI 决策台</Text>
-      <Title level={2} style={{ color: "#fff", margin: "6px 0", lineHeight: 1.25 }}>爸爸的a股智能分析</Title>
+      <Title level={2} style={{ color: "#fff", margin: "6px 0", lineHeight: 1.25 }}>{userName}的a股智能投资助手</Title>
       <Paragraph style={{ color: "#d2deef", marginBottom: 18, fontSize: 16 }}>
         {summary.heroText}
       </Paragraph>
