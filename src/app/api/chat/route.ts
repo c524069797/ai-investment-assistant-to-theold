@@ -1,7 +1,7 @@
 import { investmentAgent } from "@/mastra/agents/investment-agent";
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
-import { addChatMessage, getChatSessionById, updateChatSessionTitle } from "@/lib/db";
+import { addChatMessage, ensureChatSession, updateChatSessionTitle } from "@/lib/db";
 
 interface UIMessagePart {
   type: string;
@@ -52,10 +52,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "sessionId is required" }, { status: 400 });
     }
 
-    const chatSession = await getChatSessionById(session.userId, sessionId);
-    if (!chatSession) {
-      return NextResponse.json({ error: "会话不存在" }, { status: 404 });
-    }
+    const chatSession = await ensureChatSession(session.userId, sessionId);
 
     const coreMessages = convertMessages(messages);
     const latestUserMessage = [...messages].reverse().find((msg) => msg.role === "user");

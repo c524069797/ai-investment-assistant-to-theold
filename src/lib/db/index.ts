@@ -141,6 +141,22 @@ export async function getChatSessionById(userId: string, sessionId: string) {
   });
 }
 
+export async function ensureChatSession(userId: string, sessionId: string, title = "新对话") {
+  await ensureSeeded();
+  const existing = await prisma.chatSession.findFirst({
+    where: { id: sessionId, userId },
+  });
+  if (existing) return existing;
+
+  return prisma.chatSession.create({
+    data: {
+      id: sessionId,
+      userId,
+      title,
+    },
+  });
+}
+
 export async function getChatMessages(userId: string, sessionId: string) {
   await ensureSeeded();
   const session = await prisma.chatSession.findFirst({
