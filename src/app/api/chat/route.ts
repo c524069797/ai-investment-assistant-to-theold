@@ -34,6 +34,20 @@ function convertMessages(messages: IncomingMessage[]) {
   });
 }
 
+function buildFriendlyChatError(error: unknown) {
+  const raw = error instanceof Error ? error.message : String(error);
+  if (raw.includes("未登录")) {
+    return "抱歉，当前登录状态已失效，请重新登录后再继续对话。";
+  }
+  if (raw.includes("model") || raw.includes("channel") || raw.includes("503") || raw.includes("upstream")) {
+    return "抱歉，AI 服务当前暂时不可用，可能是模型通道繁忙或上游接口异常。您可以稍后重试，或先使用股票/自选股页面查看实时分析。";
+  }
+  if (raw.includes("session")) {
+    return "抱歉，本次对话会话状态异常，我已经为您保留当前问题。请再发送一次，系统会重新建立对话。";
+  }
+  return `抱歉，AI 助手这次没有成功响应。错误信息：${raw}`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const token = request.cookies.get(SESSION_COOKIE)?.value;
@@ -75,16 +89,24 @@ export async function POST(request: NextRequest) {
 
     const byteStream = new ReadableStream({
       async pull(controller) {
-        const { done, value } = await reader.read();
-        if (done) {
-          if (assistantContent.trim()) {
-            await addChatMessage(sessionId, "assistant", assistantContent);
+        try {
+          const { done, value } = await reader.read();
+          if (done) {
+            if (assistantContent.trim()) {
+              await addChatMessage(sessionId, "assistant", assistantContent);
+            }
+            controller.close();
+            return;
           }
+          assistantContent += value;
+          controller.enqueue(encoder.encode(value));
+        } catch (error) {
+          const fallback = buildFriendlyChatError(error);
+          assistantContent = fallback;
+          await addChatMessage(sessionId, "assistant", fallback);
+          controller.enqueue(encoder.encode(fallback));
           controller.close();
-          return;
         }
-        assistantContent += value;
-        controller.enqueue(encoder.encode(value));
       },
       cancel() {
         reader.cancel();
@@ -99,9 +121,13 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("[/api/chat] Error:", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 },
-    );
+    const fallback = buildFriendlyChatError(error);
+    return new Response(fallback, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache",
+      },
+    });
   }
 }

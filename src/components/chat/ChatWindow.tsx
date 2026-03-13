@@ -3,6 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { TextStreamChatTransport, type UIMessage } from "ai";
 import {
+  Alert,
   Button,
   Card,
   Empty,
@@ -91,6 +92,7 @@ function ConversationPanel({
   onConversationChange: () => void;
 }) {
   const [input, setInput] = useState("");
+  const [chatError, setChatError] = useState("");
   const autoPromptSentRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -106,7 +108,13 @@ function ConversationPanel({
   const { messages, sendMessage, status } = useChat({
     transport,
     messages: initialMessages,
-    onFinish: onConversationChange,
+    onFinish: () => {
+      setChatError("");
+      onConversationChange();
+    },
+    onError: (error) => {
+      setChatError(error instanceof Error ? error.message : "AI 助手暂时无法响应，请稍后再试。");
+    },
   });
 
   const isLoading = status === "submitted" || status === "streaming";
@@ -125,6 +133,7 @@ function ConversationPanel({
   }, [initialPrompt, initialMessages.length, sendMessage]);
 
   const handleQuickQuestion = (question: string) => {
+    setChatError("");
     sendMessage({ text: question });
     setInput("");
   };
@@ -132,6 +141,7 @@ function ConversationPanel({
   const handleSubmit = (e?: { preventDefault?: () => void }) => {
     e?.preventDefault?.();
     if (!input.trim()) return;
+    setChatError("");
     sendMessage({ text: input });
     setInput("");
   };
@@ -187,6 +197,16 @@ function ConversationPanel({
           <MessageBubble key={message.id} message={message} />
         ))}
 
+        {chatError && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message="AI 助手本次响应异常"
+            description={chatError}
+          />
+        )}
+
         {isLoading && (
           <div style={{ textAlign: "center", padding: 16 }}>
             <Spin size="small" />
@@ -234,6 +254,7 @@ export default function ChatWindow() {
   const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
+  const [sessionError, setSessionError] = useState("");
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [creatingSession, setCreatingSession] = useState(false);
@@ -248,12 +269,16 @@ export default function ChatWindow() {
     setLoadingSessions(true);
     try {
       const data = await fetchJson<ChatSessionSummary[]>("/api/chat/sessions");
+      setSessionError("");
       setSessions(data);
       if (data.length > 0) {
         setSelectedSessionId((prev) => (prev && data.some((item) => item.id === prev) ? prev : data[0].id));
       } else {
         setSelectedSessionId("");
       }
+    } catch (error) {
+      setSessionError(error instanceof Error ? error.message : "历史会话加载失败");
+      throw error;
     } finally {
       setLoadingSessions(false);
     }
@@ -322,8 +347,14 @@ export default function ChatWindow() {
     if (!selectedSessionId) return;
     setLoadingMessages(true);
     fetchJson<ChatMessageRecord[]>(`/api/chat/messages?sessionId=${encodeURIComponent(selectedSessionId)}`)
-      .then((data) => setInitialMessages(toUiMessages(data)))
-      .catch(() => setInitialMessages([]))
+      .then((data) => {
+        setSessionError("");
+        setInitialMessages(toUiMessages(data));
+      })
+      .catch((error) => {
+        setInitialMessages([]);
+        setSessionError(error instanceof Error ? error.message : "会话消息加载失败");
+      })
       .finally(() => setLoadingMessages(false));
   }, [selectedSessionId]);
 
@@ -382,6 +413,16 @@ export default function ChatWindow() {
             onChange={(e) => setSearchKeyword(e.target.value)}
             style={{ marginBottom: 12 }}
           />
+
+          {sessionError && (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message="会话加载异常"
+              description={sessionError}
+            />
+          )}
 
           {loadingSessions ? (
             <div style={{ textAlign: "center", padding: 32 }}><Spin /></div>
