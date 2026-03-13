@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Card, Input, Button, Typography, Space, message } from "antd";
+import { Card, Input, Button, Typography, Space, message, Spin } from "antd";
 import { UserOutlined, LockOutlined, StockOutlined } from "@ant-design/icons";
-import { useRouter } from "next/navigation";
 
 const { Title, Text } = Typography;
 
@@ -19,10 +18,10 @@ const ACCOUNTS: AccountOption[] = [
 ];
 
 export default function LoginPage() {
-  const router = useRouter();
   const [selected, setSelected] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
 
   const handleLogin = async () => {
     if (!selected) {
@@ -45,8 +44,8 @@ export default function LoginPage() {
 
       if (json.success) {
         message.success(`欢迎回来，${json.data.name}！`);
-        router.push("/");
-        router.refresh();
+        setRedirecting(true);
+        window.location.href = "/";
       } else {
         message.error(json.error || "登录失败");
       }
@@ -68,6 +67,25 @@ export default function LoginPage() {
         padding: 16,
       }}
     >
+      {redirecting && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(255,255,255,0.72)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 999,
+            flexDirection: "column",
+            gap: 12,
+          }}
+        >
+          <Spin size="large" />
+          <Text style={{ fontSize: 16, color: "#334155" }}>登录成功，正在进入首页...</Text>
+        </div>
+      )}
       <Card
         style={{
           width: "100%",

@@ -42,17 +42,17 @@ const ACTION_ENTRIES = [
 
 export default function HomePage() {
   const { data: indices, isLoading: indicesLoading, mutate: mutateIndices } = useMarketIndices();
-  const { items: watchlist } = useWatchlist();
-  const { currentUser } = useUser();
+  const { items: watchlist, isLoading: watchlistLoading } = useWatchlist();
+  const { currentUser, isLoading: userLoading } = useUser();
   const [strategy, setStrategy] = useState<StrategyMode>("conservative");
 
   const currentStrategy = STRATEGY_MODES[strategy];
 
   return (
     <div className="page-container">
-      <HeroSummary watchlist={watchlist} userName={currentUser?.name ?? "当前"} />
+      <HeroSummary watchlist={watchlist} userName={currentUser?.name ?? "当前"} loading={userLoading || watchlistLoading} />
 
-      <WatchlistSummaryGrid watchlist={watchlist} />
+      <WatchlistSummaryGrid watchlist={watchlist} loading={userLoading || watchlistLoading} />
 
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={24} lg={12}>
@@ -87,7 +87,12 @@ export default function HomePage() {
             title="⭐ 自选股总结"
             extra={<Link href="/watchlist"><Button type="link">查看全部</Button></Link>}
           >
-            {watchlist.filter((item) => item.type === "stock").length > 0 ? (
+            {userLoading || watchlistLoading ? (
+              <div style={{ textAlign: "center", padding: 40 }}>
+                <Spin />
+                <div style={{ marginTop: 12 }}><Text type="secondary">正在加载用户和自选股...</Text></div>
+              </div>
+            ) : watchlist.filter((item) => item.type === "stock").length > 0 ? (
               <div style={{ display: "grid", gap: 12 }}>
                 {watchlist
                   .filter((item) => item.type === "stock")
@@ -299,7 +304,7 @@ function useWatchlistSummaryData(watchlist: Array<{ code: string; name: string; 
   return { stockItems, data, isLoading, summary };
 }
 
-function HeroSummary({ watchlist, userName }: { watchlist: Array<{ code: string; name: string; market: number; type: string }>; userName: string }) {
+function HeroSummary({ watchlist, userName, loading }: { watchlist: Array<{ code: string; name: string; market: number; type: string }>; userName: string; loading: boolean }) {
   const { summary } = useWatchlistSummaryData(watchlist);
 
   return (
@@ -316,7 +321,7 @@ function HeroSummary({ watchlist, userName }: { watchlist: Array<{ code: string;
       <Text style={{ color: "#c3d3f4", fontSize: 13, letterSpacing: "0.08em", textTransform: "uppercase" }}>A股 · 我的自选股 AI 决策台</Text>
       <Title level={2} style={{ color: "#fff", margin: "6px 0", lineHeight: 1.25 }}>{userName}的a股智能投资助手</Title>
       <Paragraph style={{ color: "#d2deef", marginBottom: 18, fontSize: 16 }}>
-        {summary.heroText}
+        {loading ? "正在同步当前用户、自选股和首页分析，请稍候..." : summary.heroText}
       </Paragraph>
       <div className="hero-actions">
         <Link href="/watchlist">
@@ -334,37 +339,38 @@ function HeroSummary({ watchlist, userName }: { watchlist: Array<{ code: string;
   );
 }
 
-function WatchlistSummaryGrid({ watchlist }: { watchlist: Array<{ code: string; name: string; market: number; type: string }> }) {
+function WatchlistSummaryGrid({ watchlist, loading }: { watchlist: Array<{ code: string; name: string; market: number; type: string }>; loading: boolean }) {
   const { stockItems, isLoading, summary } = useWatchlistSummaryData(watchlist);
+  const pending = loading || isLoading;
 
   return (
     <Row gutter={[12, 12]} className="summary-grid" style={{ marginBottom: 16 }}>
       <Col xs={12} md={6}>
         <Card className="summary-card">
           <Text className="summary-label">自选股数量</Text>
-          <div className="summary-value">{stockItems.length}</div>
+          <div className="summary-value">{pending ? "-" : stockItems.length}</div>
           <Text className="summary-trend">今日跟踪池</Text>
         </Card>
       </Col>
       <Col xs={12} md={6}>
         <Card className="summary-card">
           <Text className="summary-label">偏强个股</Text>
-          <div className="summary-value up">{isLoading ? "-" : summary.strongCount}</div>
-          <Text className="summary-trend">{summary.strongestNames}</Text>
+          <div className="summary-value up">{pending ? "-" : summary.strongCount}</div>
+          <Text className="summary-trend">{pending ? "正在分析偏强个股..." : summary.strongestNames}</Text>
         </Card>
       </Col>
       <Col xs={12} md={6}>
         <Card className="summary-card">
           <Text className="summary-label">龙虎榜关注</Text>
-          <div className="summary-value" style={{ color: "#d48806" }}>{isLoading ? "-" : summary.dragonTigerCount}</div>
+          <div className="summary-value" style={{ color: "#d48806" }}>{pending ? "-" : summary.dragonTigerCount}</div>
           <Text className="summary-trend">以前一交易日为准</Text>
         </Card>
       </Col>
       <Col xs={12} md={6}>
         <Card className="summary-card">
           <Text className="summary-label">近7日新闻</Text>
-          <div className="summary-value" style={{ color: "#1677ff" }}>{isLoading ? "-" : summary.newsCount}</div>
-          <Text className="summary-trend">{summary.focusText}</Text>
+          <div className="summary-value" style={{ color: "#1677ff" }}>{pending ? "-" : summary.newsCount}</div>
+          <Text className="summary-trend">{pending ? "正在生成今日优先关注结论..." : summary.focusText}</Text>
         </Card>
       </Col>
     </Row>

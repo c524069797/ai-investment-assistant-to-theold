@@ -1,6 +1,6 @@
 "use client";
 
-import { Layout, Space, Button, Typography } from "antd";
+import { Layout, Space, Button, Typography, Spin } from "antd";
 import {
   FontSizeOutlined,
   StockOutlined,
@@ -15,7 +15,7 @@ const { Title } = Typography;
 
 export default function AppHeader() {
   const { increase, decrease } = useFontSize();
-  const { currentUser, logout } = useUser();
+  const { currentUser, isLoading, logout } = useUser();
 
   return (
     <Header className="app-header">
@@ -29,7 +29,11 @@ export default function AppHeader() {
         </div>
       </Link>
       <Space size={8} wrap className="app-header-actions">
-        {currentUser && (
+        {isLoading ? (
+          <span className="app-header-user" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 600, fontSize: 14 }}>
+            <Spin size="small" /> 正在加载用户...
+          </span>
+        ) : currentUser ? (
           <>
             <span className="app-header-user" style={{ fontWeight: 600, fontSize: 15 }}>
               {currentUser.avatar} {currentUser.name}
@@ -43,7 +47,7 @@ export default function AppHeader() {
               退出
             </Button>
           </>
-        )}
+        ) : null}
         <Button size="small" onClick={decrease} style={{ borderRadius: 10 }}>
           A-
         </Button>
