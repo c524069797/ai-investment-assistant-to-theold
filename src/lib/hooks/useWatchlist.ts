@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useUser } from "./useUser";
 
 export interface WatchlistItem {
@@ -14,41 +14,55 @@ export function useWatchlist() {
   const { currentUser } = useUser();
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [version, setVersion] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   const userId = currentUser?.id;
 
   useEffect(() => {
-    if (!userId) {
-      setItems([]);
-      setIsLoading(false);
-      return;
-    }
+    if (!userId) return;
 
-    setIsLoading(true);
-    fetch(`/api/watchlist?userId=${encodeURIComponent(userId)}`)
-      .then((res) => res.json())
-      .then((json) => {
+    let active = true;
+
+    const loadWatchlist = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch(`/api/watchlist?userId=${encodeURIComponent(userId)}`);
+        const json = await response.json();
+        if (!active) return;
+
         if (json.success) {
           setItems(
-            json.data.map((r: { code: string; name: string; market: number; type: string }) => ({
-              code: r.code,
-              name: r.name,
-              market: r.market,
-              type: r.type as "stock" | "fund",
+            json.data.map((record: { code: string; name: string; market: number; type: string }) => ({
+              code: record.code,
+              name: record.name,
+              market: record.market,
+              type: record.type as "stock" | "fund",
             })),
           );
+          return;
         }
-      })
-      .catch(() => {
+
         setItems([]);
-      })
-      .finally(() => setIsLoading(false));
+      } catch {
+        if (active) {
+          setItems([]);
+        }
+      } finally {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadWatchlist();
+
+    return () => {
+      active = false;
+    };
   }, [userId, version]);
 
-  // Re-fetch when user switches
   useEffect(() => {
-    const handler = () => setVersion((v) => v + 1);
+    const handler = () => setVersion((value) => value + 1);
     window.addEventListener("user-switched", handler);
     window.addEventListener("watchlist-update", handler);
     return () => {
@@ -63,9 +77,9 @@ export function useWatchlist() {
       fetch("/api/watchlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, ...item }),
+        body: JSON.stringify({ userId, code: item.code, type: item.type }),
       }).then(() => {
-        setVersion((v) => v + 1);
+        setVersion((value) => value + 1);
         window.dispatchEvent(new Event("watchlist-update"));
       });
     },
@@ -79,7 +93,7 @@ export function useWatchlist() {
         `/api/watchlist?userId=${encodeURIComponent(userId)}&code=${encodeURIComponent(code)}&type=${type}`,
         { method: "DELETE" },
       ).then(() => {
-        setVersion((v) => v + 1);
+        setVersion((value) => value + 1);
         window.dispatchEvent(new Event("watchlist-update"));
       });
     },
@@ -87,11 +101,17 @@ export function useWatchlist() {
   );
 
   const isInWatchlist = useCallback(
-    (code: string, type: "stock" | "fund") => {
-      return items.some((i) => i.code === code && i.type === type);
-    },
+    (code: string, type: "stock" | "fund") => items.some((item) => item.code === code && item.type === type),
     [items],
   );
 
-  return { items, isLoading, addItem, removeItem, isInWatchlist };
+  const visibleItems = useMemo(() => (userId ? items : []), [items, userId]);
+
+  return {
+    items: visibleItems,
+    isLoading: userId ? isLoading : false,
+    addItem,
+    removeItem,
+    isInWatchlist,
+  };
 }

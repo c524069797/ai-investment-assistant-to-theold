@@ -1,26 +1,57 @@
 "use client";
 
-import { Card, Typography, Space } from "antd";
-import { RiseOutlined, FallOutlined } from "@ant-design/icons";
+import { type MouseEvent } from "react";
+import { Button, Card, Typography, Space } from "antd";
+import { RiseOutlined, FallOutlined, RobotOutlined, StarFilled, StarOutlined } from "@ant-design/icons";
+import { useRouter } from "next/navigation";
 import { getPriceColor, formatAmount, formatPercent, formatPrice } from "@/styles/stock-colors";
 import type { StockQuote, MarketIndex } from "@/types/stock";
-
 
 const { Text, Title } = Typography;
 
 interface StockCardProps {
   stock: StockQuote | MarketIndex;
   linkTo?: string;
+  actions?: {
+    watchlisted: boolean;
+    onToggleWatchlist: () => void;
+    onOpenAi: () => void;
+  };
 }
 
-export default function StockCard({ stock, linkTo }: StockCardProps) {
+export default function StockCard({ stock, linkTo, actions }: StockCardProps) {
+  const router = useRouter();
   const color = getPriceColor(stock.changePercent);
   const Icon = stock.changePercent >= 0 ? RiseOutlined : FallOutlined;
 
-  const content = (
+  const openDetail = () => {
+    if (!linkTo) {
+      return;
+    }
+
+    if (linkTo.startsWith("http")) {
+      window.open(linkTo, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    router.push(linkTo);
+  };
+
+  const handleToggleWatchlist = (event: MouseEvent<HTMLElement>) => {
+    event.stopPropagation();
+    actions?.onToggleWatchlist();
+  };
+
+  const handleOpenAi = (event: MouseEvent<HTMLElement>) => {
+    event.stopPropagation();
+    actions?.onOpenAi();
+  };
+
+  return (
     <Card
-      hoverable
+      hoverable={!!linkTo}
       size="small"
+      onClick={linkTo ? openDetail : undefined}
       style={{
         border: "1px solid #e8ecf4",
         borderRadius: 16,
@@ -28,8 +59,8 @@ export default function StockCard({ stock, linkTo }: StockCardProps) {
       }}
       styles={{ body: { padding: "14px 16px" } }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+        <div style={{ minWidth: 0 }}>
           <Title level={5} style={{ margin: 0, fontSize: 18, lineHeight: 1.3 }}>
             {stock.name}
           </Title>
@@ -37,7 +68,7 @@ export default function StockCard({ stock, linkTo }: StockCardProps) {
             {stock.code}
           </Text>
         </div>
-        <div style={{ textAlign: "right" }}>
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
           <div style={{ fontSize: 24, fontWeight: 700, color, lineHeight: 1.2 }}>
             {formatPrice(stock.price)}
           </div>
@@ -56,6 +87,8 @@ export default function StockCard({ stock, linkTo }: StockCardProps) {
           borderTop: "1px dashed #eef1f6",
           display: "flex",
           justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
         }}
       >
         <Text type="secondary" style={{ fontSize: 13 }}>
@@ -65,16 +98,22 @@ export default function StockCard({ stock, linkTo }: StockCardProps) {
           成交额 {formatAmount(stock.amount)}
         </Text>
       </div>
+
+      {actions ? (
+        <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+          <Button
+            type={actions.watchlisted ? "default" : "primary"}
+            icon={actions.watchlisted ? <StarFilled /> : <StarOutlined />}
+            onClick={handleToggleWatchlist}
+            style={{ flex: 1 }}
+          >
+            {actions.watchlisted ? "已自选" : "加入自选"}
+          </Button>
+          <Button icon={<RobotOutlined />} onClick={handleOpenAi} style={{ flex: 1 }}>
+            AI分析
+          </Button>
+        </div>
+      ) : null}
     </Card>
   );
-
-  if (linkTo) {
-    return (
-      <a href={linkTo} target="_blank" rel="noreferrer" style={{ display: "block" }}>
-        {content}
-      </a>
-    );
-  }
-
-  return content;
 }

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { getWatchlist, addToWatchlist, removeFromWatchlist } from "@/lib/db";
 
@@ -21,11 +23,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userId, code, name, market, type } = body;
-    if (!userId || !code || !name || !type) {
+    const { userId, code, type } = body;
+    if (!userId || !code || !type) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
-    const record = await addToWatchlist(userId, { code, name, market: market ?? 0, type });
+    const record = await addToWatchlist(userId, { code, type });
     return NextResponse.json({ success: true, data: record });
   } catch (error) {
     console.error("[/api/watchlist POST] Error:", error);

@@ -7,7 +7,19 @@
     "build": "prisma generate && next build",
     "postinstall": "prisma generate",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:routes": "vitest run src/app/api",
+    "test:tools": "vitest run src/mastra/tools",
+    "test:web": "vitest run src/lib/hooks src/components",
+    "test:smoke": "vitest run test/smoke",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui",
+    "bigv:upload": "node scripts/upload-bigv-articles.mjs",
+    "bigv:sync:finance": "node scripts/sync-finance-monitor-bigv.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.39",
@@ -32,13 +44,21 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.53.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^20",
     "@types/pg": "^8.18.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^3.2.4",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "jsdom": "^26.1.0",
+    "msw": "^2.11.6",
     "prisma": "^7.4.2",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.4"
   }
 }

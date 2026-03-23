@@ -1,653 +1,747 @@
 "use client";
 
-import { Typography, Card, Row, Col, Button, Space, Alert, Spin, Segmented, Tag } from "antd";
 import {
-  RobotOutlined,
+  AudioOutlined,
+  MehOutlined,
+  SolutionOutlined,
+  StarFilled,
   StockOutlined,
-  ReadOutlined,
-  StarOutlined,
-  ThunderboltOutlined,
-  SafetyCertificateOutlined,
-  AimOutlined,
-  FundProjectionScreenOutlined,
-  ArrowUpOutlined,
-  ArrowDownOutlined,
-  MinusOutlined,
-  ReloadOutlined,
 } from "@ant-design/icons";
+import { Button, Card, Empty, Skeleton, Typography } from "antd";
 import Link from "next/link";
+import { useMemo } from "react";
 import useSWR from "swr";
-import { useMemo, useState } from "react";
 import { useMarketIndices } from "@/lib/hooks/useStockData";
-import { useWatchlist } from "@/lib/hooks/useWatchlist";
 import { useUser } from "@/lib/hooks/useUser";
-import StockCard from "@/components/stock/StockCard";
-import FundCard from "@/components/fund/FundCard";
-import type { FundEstimate } from "@/types/fund";
-import { STRATEGY_MODES, type StrategyMode } from "@/lib/constants/market";
-import { formatPercent, getPriceColor } from "@/styles/stock-colors";
-import WatchlistInsightCard from "@/components/stock/WatchlistInsightCard";
-import { getTonghuashunIndexUrl } from "@/lib/utils/stock-links";
+import { useWatchlist } from "@/lib/hooks/useWatchlist";
+import { formatPercent, formatPrice, getPriceColor } from "@/styles/stock-colors";
+import type { MarketIndex } from "@/types/stock";
 
-const { Title, Text, Paragraph } = Typography;
+const { Text } = Typography;
 
-const ACTION_ENTRIES = [
-  { href: "/stocks", icon: <StockOutlined />, label: "沪深行情" },
-  { href: "/strategy", icon: <AimOutlined />, label: "策略筛选" },
-  { href: "/chat", icon: <RobotOutlined />, label: "AI 分析" },
-  { href: "/watchlist", icon: <StarOutlined />, label: "自选复盘" },
-  { href: "/education", icon: <ReadOutlined />, label: "投资学堂" },
-  { href: "/funds", icon: <FundProjectionScreenOutlined />, label: "基金对比" },
+const ASK_AI_ACTIONS = [
+  {
+    title: "大盘怎么走？",
+    prompt: "请用通俗方式分析今天A股大盘情绪、强弱方向和需要重点观察的风险点。",
+  },
+  {
+    title: "自选谁更强？",
+    prompt: "请结合我当前自选思路，告诉我今天更该先看哪类股票，并给出简短理由。",
+  },
+  {
+    title: "今天看什么板块？",
+    prompt: "请用简洁方式告诉我今天A股更值得先关注哪些方向，并说明背后的原因。",
+  },
 ];
 
-export default function HomePage() {
-  const { data: indices, isLoading: indicesLoading, mutate: mutateIndices } = useMarketIndices();
-  const { items: watchlist, isLoading: watchlistLoading } = useWatchlist();
-  const { currentUser, isLoading: userLoading } = useUser();
-  const [strategy, setStrategy] = useState<StrategyMode>("conservative");
+interface WatchlistItem {
+  code: string;
+  name: string;
+  market: number;
+  type: string;
+}
 
-  const currentStrategy = STRATEGY_MODES[strategy];
+interface WatchlistSummaryItem {
+  code: string;
+  name: string;
+  market: number;
+  price: number;
+  changePercent: number;
+}
 
+interface SentimentData {
+  score: number;
+  label: string;
+  advice: string;
+  risingCount: number;
+  fallingCount: number;
+}
+
+interface AggressiveScanResult {
+  code: string;
+  name: string;
+  market: number;
+  price: number;
+  changePercent: number;
+  turnoverRate: number;
+  industry: string;
+  pe: number;
+  pb: number;
+  totalMarketCap: number;
+}
+
+const HOTSPOT_TOPICS = [
+  { keyword: "人工智能", icon: "🤖", heat: 95 },
+  { keyword: "新能源", icon: "⚡", heat: 88 },
+  { keyword: "半导体", icon: "💎", heat: 85 },
+  { keyword: "机器人", icon: "🦾", heat: 82 },
+  { keyword: "数字经济", icon: "🌐", heat: 78 },
+  { keyword: "医药", icon: "💊", heat: 72 },
+];
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function fetcher<T>(url: string): Promise<T> {
+  return fetch(url)
+    .then((res) => res.json())
+    .then((json) => {
+      if (!json.success) {
+        throw new Error(json.error || "请求失败");
+      }
+      return json.data as T;
+    });
+}
+
+function buildPromptChatLink(title: string, prompt: string) {
+  return `/chat?title=${encodeURIComponent(title)}&prompt=${encodeURIComponent(prompt)}`;
+}
+
+function buildIndexPrompt(index: MarketIndex) {
+  return `请用简洁方式分析${index.name}（${index.code}）当前状态，重点说明：1）市场情绪；2）短线支撑和压力；3）今天更应该观察什么信号；4）给新手一句提醒。当前价格 ${index.price.toFixed(2)}，涨跌幅 ${index.changePercent.toFixed(2)}%。`;
+}
+
+function getIndexComment(index: MarketIndex) {
+  if (index.changePercent >= 1.2) {
+    return "情绪升温，偏强运行";
+  }
+  if (index.changePercent >= 0.3) {
+    return "红盘整理，市场偏暖";
+  }
+  if (index.changePercent > 0) {
+    return "小幅翻红，观察承接";
+  }
+  if (index.changePercent <= -1.2) {
+    return "跌幅明显，先控风险";
+  }
+  if (index.changePercent <= -0.3) {
+    return "震荡回落，等待企稳";
+  }
+  return "窄幅震荡，静待方向";
+}
+
+function getSentiment(indices?: MarketIndex[]): SentimentData {
+  if (!indices?.length) {
+    return {
+      score: 48,
+      label: "中性",
+      advice: "市场整体偏中性，先看核心指数方向。",
+      risingCount: 0,
+      fallingCount: 0,
+    };
+  }
+
+  const risingCount = indices.filter((item) => item.changePercent > 0).length;
+  const fallingCount = indices.filter((item) => item.changePercent < 0).length;
+  const avgChange = indices.reduce((sum, item) => sum + item.changePercent, 0) / indices.length;
+  const score = clamp(Math.round(50 + avgChange * 18 + (risingCount - fallingCount) * 6), 8, 92);
+
+  if (score <= 35) {
+    return {
+      score,
+      label: "偏弱",
+      advice: "情绪偏谨慎，优先控制节奏和仓位。",
+      risingCount,
+      fallingCount,
+    };
+  }
+  if (score >= 65) {
+    return {
+      score,
+      label: "偏强",
+      advice: "情绪偏热，强势机会多，但也别追高。",
+      risingCount,
+      fallingCount,
+    };
+  }
+
+  return {
+    score,
+    label: "中性",
+    advice: "市场整体偏中性，先看主线再决定动作。",
+    risingCount,
+    fallingCount,
+  };
+}
+
+function buildTodaySummary(sentiment: SentimentData) {
+  if (sentiment.score >= 65) {
+    return "科技成长偏强，消费防御偏弱，留意主线轮动。";
+  }
+  if (sentiment.score <= 35) {
+    return "红利防守偏强，高位题材偏弱，注意仓位节奏。";
+  }
+  return "科技红利分化运行，弱消费偏弱，先看轮动确认。";
+}
+
+function buildStrategyBullets(sentiment: SentimentData, watchlist: WatchlistSummaryItem[]) {
+  const strongest = [...watchlist].sort((a, b) => b.changePercent - a.changePercent)[0];
+
+  return [
+    sentiment.score >= 65
+      ? "优先关注趋势较强的大盘蓝筹和主线方向。"
+      : sentiment.score <= 35
+        ? "今天先看防守，避免在弱势里频繁追高。"
+        : "先观察方向，等指数给出更明确的信号。",
+    strongest
+      ? `自选里可先盯 ${strongest.name}，它当前相对更强。`
+      : "还没有明显领涨自选，可先从指数和板块入手。",
+    sentiment.risingCount >= sentiment.fallingCount
+      ? "可以留意科技、新能源等弹性方向是否轮动。"
+      : "注意高位回撤和情绪降温带来的分化压力。",
+    "无论强弱，仓位和节奏都比一次判断更重要。",
+  ];
+}
+
+function buildSparkline(changePercent: number) {
+  if (changePercent > 0.6) {
+    return "6,31 18,22 31,26 43,14 57,18 70,9 84,12 96,4";
+  }
+  if (changePercent > 0) {
+    return "6,28 18,24 31,27 43,20 57,22 70,15 84,16 96,10";
+  }
+  if (changePercent < -0.6) {
+    return "6,10 18,12 31,18 43,14 57,24 70,20 84,28 96,30";
+  }
+  return "6,20 18,20 31,21 43,20 57,21 70,20 84,21 96,20";
+}
+
+function getStrongestItem<T extends { changePercent: number }>(items: T[]) {
+  return [...items].sort((a, b) => b.changePercent - a.changePercent)[0] ?? null;
+}
+
+function getWeakestItem<T extends { changePercent: number }>(items: T[]) {
+  return [...items].sort((a, b) => a.changePercent - b.changePercent)[0] ?? null;
+}
+
+function pickIndices(indices: MarketIndex[] | undefined, preferredCodes: string[], limit: number) {
+  if (!indices?.length) {
+    return [];
+  }
+
+  const picked = preferredCodes
+    .map((code) => indices.find((item) => item.code === code))
+    .filter((item): item is MarketIndex => !!item);
+
+  const rest = indices.filter((item) => !picked.some((pickedItem) => pickedItem.code === item.code));
+  return [...picked, ...rest].slice(0, limit);
+}
+
+function formatTurnoverMeta(index: MarketIndex) {
+  return `量 ${(index.volume / 100000000).toFixed(1)}亿 / 额 ${(index.amount / 100000000).toFixed(1)}亿`;
+}
+
+function getHotspotFlowStatus(stock: AggressiveScanResult) {
+  if (stock.changePercent >= 3 && stock.turnoverRate >= 10) {
+    return {
+      label: "资金追涨",
+      tone: "strong",
+      hint: "量价同步偏强，适合优先盯盘。",
+    };
+  }
+  if (stock.changePercent >= 0 && stock.turnoverRate >= 6) {
+    return {
+      label: "资金试探",
+      tone: "warm",
+      hint: "有资金回流，重点看能否持续放量。",
+    };
+  }
+  if (stock.turnoverRate >= 8) {
+    return {
+      label: "高换手分歧",
+      tone: "split",
+      hint: "分歧加大，容易出现冲高回落。",
+    };
+  }
+  return {
+    label: "等待确认",
+    tone: "calm",
+    hint: "热度尚可，但还需要进一步确认。",
+  };
+}
+
+function DashboardTitle({ summary }: { summary: string }) {
   return (
-    <div className="page-container">
-      <HeroSummary watchlist={watchlist} userName={currentUser?.name ?? "当前"} loading={userLoading || watchlistLoading} />
-
-      <WatchlistSummaryGrid watchlist={watchlist} loading={userLoading || watchlistLoading} />
-
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} lg={12}>
-          <Card>
-            <div className="section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <Title level={4} className="section-title">A股实时指数</Title>
-                <Text className="section-subtitle">上证/深证/创业板核心指数，15秒自动刷新</Text>
-              </div>
-              <Button icon={<ReloadOutlined />} onClick={() => mutateIndices()} title="手动刷新">
-                刷新
-              </Button>
-            </div>
-
-            {indicesLoading ? (
-              <div style={{ textAlign: "center", padding: 20 }}><Spin /></div>
-            ) : indices ? (
-              <Row gutter={[12, 12]}>
-                {indices.map((idx) => (
-                  <Col xs={24} sm={12} key={idx.code}>
-                    <StockCard stock={idx} linkTo={getTonghuashunIndexUrl(idx.code)} />
-                  </Col>
-                ))}
-              </Row>
-            ) : (
-              <Text type="secondary">暂无数据</Text>
-            )}
-          </Card>
-        </Col>
-        <Col xs={24} lg={12}>
-          <Card
-            title="⭐ 自选股总结"
-            extra={<Link href="/watchlist"><Button type="link">查看全部</Button></Link>}
-          >
-            {userLoading || watchlistLoading ? (
-              <div style={{ textAlign: "center", padding: 40 }}>
-                <Spin />
-                <div style={{ marginTop: 12 }}><Text type="secondary">正在加载用户和自选股...</Text></div>
-              </div>
-            ) : watchlist.filter((item) => item.type === "stock").length > 0 ? (
-              <div style={{ display: "grid", gap: 12 }}>
-                {watchlist
-                  .filter((item) => item.type === "stock")
-                  .slice(0, 2)
-                  .map((item) => (
-                    <WatchlistInsightCard key={`${item.type}-${item.code}`} code={item.code} name={item.name} market={item.market} compact />
-                  ))}
-              </div>
-            ) : (
-              <Alert
-                type="info"
-                showIcon
-                message="先添加自选股，首页才会展示 AI 深度分析"
-                description="当前版本会定时刷新自选股分析卡；若后续接入后端推送，可进一步升级为实时监控。"
-              />
-            )}
-          </Card>
-        </Col>
-      </Row>
-
-      <IndexAnalysis />
-
-      <Card
-        title="🎯 A股策略模式"
-        style={{ marginBottom: 16 }}
-        extra={
-          <Segmented
-            options={[
-              {
-                label: (
-                  <Space>
-                    <SafetyCertificateOutlined />
-                    <span>爸爸模式</span>
-                  </Space>
-                ),
-                value: "conservative",
-              },
-              {
-                label: (
-                  <Space>
-                    <ThunderboltOutlined />
-                    <span>妈妈模式</span>
-                  </Space>
-                ),
-                value: "aggressive",
-              },
-            ]}
-            value={strategy}
-            onChange={(val) => setStrategy(val as StrategyMode)}
-          />
-        }
-      >
-        <div style={{ padding: "8px 0" }}>
-          <Title level={4} style={{ margin: "0 0 8px" }}>
-            {strategy === "conservative" ? "🛡️" : "🔥"} {currentStrategy.name}
-          </Title>
-          <Paragraph style={{ fontSize: 16, color: "#666", margin: 0 }}>
-            {currentStrategy.description}
-          </Paragraph>
-          <div style={{ marginTop: 12, padding: 12, background: "#f6f8fa", borderRadius: 8 }}>
-            {strategy === "conservative" ? (
-              <Space direction="vertical" size={4}>
-                <Text style={{ fontSize: 15 }}>• <strong>买入区间</strong>：RSI &lt; 30、靠近布林带下轨、回踩年线</Text>
-                <Text style={{ fontSize: 15 }}>• <strong>分批原则</strong>：先轻仓试错，再根据成交量确认加仓</Text>
-                <Text style={{ fontSize: 15 }}>• <strong>止盈纪律</strong>：单笔目标 8%-12%，不贪多</Text>
-                <Text style={{ fontSize: 15 }}>• <strong>适用市场</strong>：震荡市和高股息权重股</Text>
-              </Space>
-            ) : (
-              <Space direction="vertical" size={4}>
-                <Text style={{ fontSize: 15 }}>• <strong>触发条件</strong>：题材热度提升 + 放量突破 + 换手活跃</Text>
-                <Text style={{ fontSize: 15 }}>• <strong>止盈策略</strong>：分级止盈，先锁定 10% 再看趋势</Text>
-                <Text style={{ fontSize: 15 }}>• <strong>止损规则</strong>：跌破关键支撑线，严格退出</Text>
-                <Text style={{ fontSize: 15 }}>• <strong>适用市场</strong>：趋势市和题材轮动行情</Text>
-              </Space>
-            )}
-          </div>
-        </div>
-      </Card>
-
-      <Card title="🚀 交易功能区" style={{ marginBottom: 16 }}>
-        <Row gutter={[12, 12]} className="action-grid">
-          {ACTION_ENTRIES.map((entry) => (
-            <Col xs={8} sm={8} md={4} key={entry.href}>
-              <Link href={entry.href}>
-                <div className="action-tile">
-                  <div className="action-icon">{entry.icon}</div>
-                  <Text className="action-label">{entry.label}</Text>
-                </div>
-              </Link>
-            </Col>
-          ))}
-        </Row>
-      </Card>
-
-      {watchlist.length > 0 && (
-        <Card
-          title="⭐ 我的自选股 AI 分析"
-          extra={<Link href="/watchlist"><Button type="link">查看全部</Button></Link>}
-          style={{ marginBottom: 16 }}
-        >
-          <Row gutter={[12, 12]}>
-            {watchlist.slice(0, 4).map((item) => (
-              <Col xs={24} key={`${item.type}-${item.code}`}>
-                {item.type === "stock" ? (
-                  <WatchlistInsightCard code={item.code} name={item.name} market={item.market} compact />
-                ) : (
-                  <WatchlistFundPreview code={item.code} name={item.name} />
-                )}
-              </Col>
-            ))}
-          </Row>
-        </Card>
-      )}
-
-      <Alert
-        message="A股交易风险提示"
-        description="市场波动受政策、流动性和情绪影响较大。页面中的 AI 评分和策略建议仅用于研究与学习，不构成任何投资建议。"
-        type="warning"
-        showIcon
-        style={{ marginBottom: 16 }}
-      />
+    <div className="modern-dashboard-title modern-dashboard-title--compact">
+      <Text className="modern-dashboard-title__summary modern-dashboard-title__summary--single">{summary}</Text>
     </div>
   );
 }
 
-// --- Watchlist preview components with real-time data ---
-
-interface WatchlistInsightSummary {
-  code: string;
-  name: string;
-  market: number;
-  changePercent: number;
-  volumeRatio: number;
-  concept: string;
-  dragonTiger: { isOnList: boolean };
-  news: Array<{ date: string }>;
-  breakoutLevels: Array<{ price: number }>;
-  pressureLevels: Array<{ price: number }>;
-}
-
-function useWatchlistSummaryData(watchlist: Array<{ code: string; name: string; market: number; type: string }>) {
-  const stockItems = watchlist.filter((item) => item.type === "stock").slice(0, 6);
-  const summaryKey = stockItems.length > 0
-    ? `/api/stocks?action=watchlist-summary&items=${encodeURIComponent(JSON.stringify(stockItems.map((item) => ({ code: item.code, name: item.name, market: item.market }))))}`
-    : null;
-
-  const { data, isLoading } = useSWR<WatchlistInsightSummary[]>(summaryKey, watchlistFetcher, {
-    refreshInterval: 60000,
-  });
-
-  const summary = useMemo(() => {
-    if (!data || data.length === 0) {
-      return {
-        stockCount: stockItems.length,
-        upCount: 0,
-        downCount: 0,
-        strongCount: 0,
-        dragonTigerCount: 0,
-        newsCount: 0,
-        topGainer: null as WatchlistInsightSummary | null,
-        topLoser: null as WatchlistInsightSummary | null,
-        strongestNames: "暂无",
-        heroText: "先添加自选股，首页才会自动生成今日自选股分析结果。",
-        focusText: "先添加自选股后，这里会自动生成今日自选股总结。",
-      };
-    }
-
-    const upCount = data.filter((item) => item.changePercent > 0).length;
-    const downCount = data.filter((item) => item.changePercent < 0).length;
-    const strongCount = data.filter((item) => item.changePercent > 0).length;
-    const dragonTigerCount = data.filter((item) => item.dragonTiger.isOnList).length;
-    const newsCount = data.reduce((sum, item) => sum + item.news.length, 0);
-    const topGainer = [...data].sort((a, b) => b.changePercent - a.changePercent)[0] ?? null;
-    const topLoser = [...data].sort((a, b) => a.changePercent - b.changePercent)[0] ?? null;
-    const strongestNames = data
-      .filter((item) => item.changePercent > 0)
-      .sort((a, b) => b.changePercent - a.changePercent)
-      .slice(0, 2)
-      .map((item) => `${item.name} ${formatPercent(item.changePercent)}`)
-      .join("，") || "暂无偏强个股";
-
-    const sorted = [...data].sort((a, b) => {
-      const scoreA = (a.dragonTiger.isOnList ? 100 : 0) + a.news.length * 10 + a.volumeRatio * 5 + Math.max(a.changePercent, 0);
-      const scoreB = (b.dragonTiger.isOnList ? 100 : 0) + b.news.length * 10 + b.volumeRatio * 5 + Math.max(b.changePercent, 0);
-      return scoreB - scoreA;
-    });
-
-    const focus = sorted[0];
-    const heroText = `你的自选股今天 ${upCount} 涨 ${downCount} 跌${topGainer ? `，涨得最多是 ${topGainer.name} ${formatPercent(topGainer.changePercent)}` : ""}${topLoser ? `，跌得最多是 ${topLoser.name} ${formatPercent(topLoser.changePercent)}` : ""}。${focus ? `当前优先关注 ${focus.name}` : ""}${focus?.dragonTiger.isOnList ? "，它出现在前一交易日龙虎榜" : ""}${focus && focus.news.length > 0 ? `，近7日有 ${focus.news.length} 条新闻。` : "。"}`;
-    const focusText = focus
-      ? `${focus.name}（${focus.concept}）当前优先级最高${focus.dragonTiger.isOnList ? "，前一交易日上榜龙虎榜" : ""}${focus.news.length > 0 ? `，近7日有 ${focus.news.length} 条新闻` : ""}。`
-      : "今日暂无明显优先盯盘标的。";
-
-    return {
-      stockCount: stockItems.length,
-      upCount,
-      downCount,
-      strongCount,
-      dragonTigerCount,
-      newsCount,
-      topGainer,
-      topLoser,
-      strongestNames,
-      heroText,
-      focusText,
-    };
-  }, [data, stockItems.length]);
-
-  return { stockItems, data, isLoading, summary };
-}
-
-function HeroSummary({ watchlist, userName, loading }: { watchlist: Array<{ code: string; name: string; market: number; type: string }>; userName: string; loading: boolean }) {
-  const { summary } = useWatchlistSummaryData(watchlist);
+function DashboardHero({
+  summary,
+  sentiment,
+  indices,
+  watchlistCount,
+  strongestWatchlist,
+}: {
+  summary: string;
+  sentiment: SentimentData;
+  indices: MarketIndex[];
+  watchlistCount: number;
+  strongestWatchlist: WatchlistSummaryItem | null;
+}) {
+  const strongestIndex = getStrongestItem(indices);
+  const spotlightName = strongestWatchlist?.name ?? strongestIndex?.name ?? "观察主线";
+  const spotlightDesc = strongestWatchlist
+    ? `${strongestWatchlist.name} 当前领跑自选，可作为优先跟踪标的。`
+    : strongestIndex
+      ? `${strongestIndex.name} 当前表现更强，适合作为盘面风向参考。`
+      : "先看核心指数和情绪，再决定今天的观察顺序。";
+  const spotlightIndices = indices.slice(0, 4);
 
   return (
-    <Card
-      style={{
-        marginBottom: 16,
-        borderRadius: 22,
-        border: "1px solid #0f172a0f",
-        background: "linear-gradient(135deg, #0b1220 0%, #18263f 45%, #273b5f 100%)",
-        boxShadow: "0 20px 36px rgba(15, 23, 42, 0.22)",
-      }}
-      styles={{ body: { padding: 28 } }}
-    >
-      <Text style={{ color: "#c3d3f4", fontSize: 13, letterSpacing: "0.08em", textTransform: "uppercase" }}>A股 · 我的自选股 AI 决策台</Text>
-      <Title level={2} style={{ color: "#fff", margin: "6px 0", lineHeight: 1.25 }}>{userName}的a股智能投资助手</Title>
-      <Paragraph style={{ color: "#d2deef", marginBottom: 18, fontSize: 16 }}>
-        {loading ? "正在同步当前用户、自选股和首页分析，请稍候..." : summary.heroText}
-      </Paragraph>
-      <div className="hero-actions">
-        <Link href="/watchlist">
-          <Button type="primary" size="large" icon={<StarOutlined />}>
-            查看自选股分析
-          </Button>
-        </Link>
-        <Link href="/chat">
-          <Button size="large" icon={<RobotOutlined />}>
-            深度问AI
-          </Button>
-        </Link>
+    <section className="modern-dashboard-stage">
+      <div className="modern-dashboard-stage__backdrop" />
+      <div className="modern-dashboard-stage__grid">
+        <div className="modern-dashboard-stage__main">
+          <div className="modern-dashboard-stage__eyebrow">AI investment copilot</div>
+          <h1 className="modern-dashboard-stage__title">投资驾驶舱</h1>
+          <div className="modern-dashboard-stage__summary">{summary}</div>
+          <Text className="modern-dashboard-stage__advice">{sentiment.advice}</Text>
+          <div className="modern-dashboard-stage__actions">
+            <Link href="/chat">
+              <Button type="primary" icon={<AudioOutlined />}>打开 AI 助手</Button>
+            </Link>
+            <Link href="/strategy">
+              <Button icon={<SolutionOutlined />}>查看今日策略</Button>
+            </Link>
+          </div>
+          <div className="modern-dashboard-stage__quick-links">
+            {ASK_AI_ACTIONS.map((item) => (
+              <Link key={item.title} href={buildPromptChatLink(item.title, item.prompt)} className="modern-dashboard-stage__quick-link">
+                {item.title}
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <div className="modern-dashboard-stage__focus-card">
+          <span className="modern-dashboard-stage__focus-label">今日焦点</span>
+          <strong className="modern-dashboard-stage__focus-title">{spotlightName}</strong>
+          <span className="modern-dashboard-stage__focus-desc">{spotlightDesc}</span>
+          <div className="modern-dashboard-stage__stats-grid">
+            <div className="modern-dashboard-stage__stat-card">
+              <span className="modern-dashboard-stage__stat-label">市场情绪</span>
+              <strong className="modern-dashboard-stage__stat-value">{sentiment.label}（{sentiment.score}）</strong>
+              <span className="modern-dashboard-stage__stat-hint">当前盘面偏向 {sentiment.label}</span>
+            </div>
+            <div className="modern-dashboard-stage__stat-card">
+              <span className="modern-dashboard-stage__stat-label">指数涨跌</span>
+              <strong className="modern-dashboard-stage__stat-value">{sentiment.risingCount} 涨 / {sentiment.fallingCount} 跌</strong>
+              <span className="modern-dashboard-stage__stat-hint">先看广度，再看主线</span>
+            </div>
+            <div className="modern-dashboard-stage__stat-card">
+              <span className="modern-dashboard-stage__stat-label">自选股票</span>
+              <strong className="modern-dashboard-stage__stat-value">{watchlistCount}</strong>
+              <span className="modern-dashboard-stage__stat-hint">重点标的可并排跟踪</span>
+            </div>
+            <div className="modern-dashboard-stage__stat-card">
+              <span className="modern-dashboard-stage__stat-label">优先方向</span>
+              <strong className="modern-dashboard-stage__stat-value">{strongestWatchlist ? "自选强势" : strongestIndex ? "指数领涨" : "等待确认"}</strong>
+              <span className="modern-dashboard-stage__stat-hint">先看强，再决定仓位节奏</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="modern-dashboard-stage__signal-board">
+          <div className="modern-dashboard-stage__signal-head">
+            <span>核心风向</span>
+            <strong>实时指数板</strong>
+          </div>
+          <div className="modern-dashboard-stage__signal-list">
+            {spotlightIndices.map((item) => {
+              const color = getPriceColor(item.changePercent);
+
+              return (
+                <Link key={item.code} href={buildPromptChatLink(`${item.name}分析`, buildIndexPrompt(item))} className="modern-dashboard-stage__signal-card">
+                  <span className="modern-dashboard-stage__signal-name">{item.name}</span>
+                  <strong className="modern-dashboard-stage__signal-price">{formatPrice(item.price)}</strong>
+                  <span className="modern-dashboard-stage__signal-change" style={{ color }}>{formatPercent(item.changePercent)}</span>
+                  <span className="modern-dashboard-stage__signal-note">{getIndexComment(item)}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function AskAIPanel() {
+  return (
+    <Card className="modern-dashboard-panel modern-dashboard-panel--ask" title="问 AI" extra={<AudioOutlined />}>
+      <Link href="/chat" className="modern-panel-cover-link">
+        <div className="modern-ask-placeholder">让 AI 帮你分析大盘、个股、板块轮动和自选强弱，桌面端可以把它当成你的实时投研入口。</div>
+      </Link>
+      <div className="modern-ask-actions">
+        {ASK_AI_ACTIONS.map((item) => (
+          <Link key={item.title} href={buildPromptChatLink(item.title, item.prompt)}>
+            <Button type="link">{item.title}</Button>
+          </Link>
+        ))}
       </div>
     </Card>
   );
 }
 
-function WatchlistSummaryGrid({ watchlist, loading }: { watchlist: Array<{ code: string; name: string; market: number; type: string }>; loading: boolean }) {
-  const { stockItems, isLoading, summary } = useWatchlistSummaryData(watchlist);
-  const pending = loading || isLoading;
+function SentimentPanel({ sentiment }: { sentiment: SentimentData }) {
+  const rotation = -90 + sentiment.score * 1.8;
 
   return (
-    <Row gutter={[12, 12]} className="summary-grid" style={{ marginBottom: 16 }}>
-      <Col xs={12} md={6}>
-        <Card className="summary-card">
-          <Text className="summary-label">自选股数量</Text>
-          <div className="summary-value">{pending ? "-" : stockItems.length}</div>
-          <Text className="summary-trend">今日跟踪池</Text>
-        </Card>
-      </Col>
-      <Col xs={12} md={6}>
-        <Card className="summary-card">
-          <Text className="summary-label">偏强个股</Text>
-          <div className="summary-value up">{pending ? "-" : summary.strongCount}</div>
-          <Text className="summary-trend">{pending ? "正在分析偏强个股..." : summary.strongestNames}</Text>
-        </Card>
-      </Col>
-      <Col xs={12} md={6}>
-        <Card className="summary-card">
-          <Text className="summary-label">龙虎榜关注</Text>
-          <div className="summary-value" style={{ color: "#d48806" }}>{pending ? "-" : summary.dragonTigerCount}</div>
-          <Text className="summary-trend">以前一交易日为准</Text>
-        </Card>
-      </Col>
-      <Col xs={12} md={6}>
-        <Card className="summary-card">
-          <Text className="summary-label">近7日新闻</Text>
-          <div className="summary-value" style={{ color: "#1677ff" }}>{pending ? "-" : summary.newsCount}</div>
-          <Text className="summary-trend">{pending ? "正在生成今日优先关注结论..." : summary.focusText}</Text>
-        </Card>
-      </Col>
-    </Row>
+    <Link href="/strategy" className="modern-panel-link">
+      <Card className="modern-dashboard-panel modern-dashboard-panel--sentiment home-click-card" title="市场情绪" extra={<MehOutlined />}>
+        <div className="sentiment-card-body">
+          <div className="sentiment-card-body__label">{sentiment.label}</div>
+          <div className="sentiment-gauge">
+            <div className="sentiment-gauge__arc" />
+            <div className="sentiment-gauge__needle" style={{ transform: `translateX(-50%) rotate(${rotation}deg)` }} />
+            <div className="sentiment-gauge__center" />
+          </div>
+          <div className="sentiment-scale-label sentiment-scale-label--left">谨慎</div>
+          <div className="sentiment-scale-label sentiment-scale-label--right">贪婪</div>
+          <div className="sentiment-card-body__summary">
+            <div>市场情绪：</div>
+            <strong>{sentiment.label}（{sentiment.score}）</strong>
+          </div>
+          <Text className="sentiment-card-body__tip">{sentiment.advice}</Text>
+        </div>
+      </Card>
+    </Link>
   );
 }
 
-const watchlistFetcher = async (url: string) => {
-  const res = await fetch(url);
-  const json = await res.json();
-  if (!json.success) throw new Error(json.error);
-  return json.data;
-};
+function WatchlistPanel({ items, loading }: { items: WatchlistSummaryItem[]; loading: boolean }) {
+  return (
+    <Card className="modern-dashboard-panel modern-dashboard-panel--watchlist" title="我的自选" extra={<StarFilled />}>
+      {loading ? (
+        <div className="modern-watchlist-loading">
+          <Skeleton active paragraph={{ rows: 4 }} title={false} />
+        </div>
+      ) : items.length ? (
+        <div className="modern-watchlist-list">
+          {items.map((item) => {
+            const color = getPriceColor(item.changePercent);
 
-function WatchlistFundPreview({ code, name }: { code: string; name: string }) {
-  const { data: estimate, isLoading } = useSWR<FundEstimate>(
-    `/api/funds?action=estimate&code=${code}`,
-    watchlistFetcher,
-    { refreshInterval: 30000 },
+            return (
+              <Link key={item.code} href={`/stocks/${encodeURIComponent(item.code)}?market=${item.market}`} className="modern-watchlist-row">
+                <div className="modern-watchlist-row__main">
+                  <div className="modern-watchlist-row__name">{item.name}（{item.code}）</div>
+                  <div className="modern-watchlist-row__price-line">
+                    <span className="modern-watchlist-row__price">{formatPrice(item.price)}</span>
+                    <span className="modern-watchlist-row__change" style={{ color }}>
+                      {item.changePercent > 0 ? "▲" : item.changePercent < 0 ? "▼" : "•"} {formatPercent(item.changePercent)}
+                    </span>
+                  </div>
+                </div>
+                <svg className="modern-watchlist-row__spark" viewBox="0 0 102 36" fill="none" aria-hidden>
+                  <polyline
+                    points={buildSparkline(item.changePercent)}
+                    stroke={color}
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </Link>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="modern-panel-empty">
+          <Empty description="还没有自选股" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          <Link href="/stocks">
+            <Button type="primary" icon={<StockOutlined />}>去添加股票</Button>
+          </Link>
+        </div>
+      )}
+    </Card>
   );
+}
 
-  if (isLoading) {
-    return <Card size="small" loading />;
+function StrategyPanel({ sentiment, watchlist }: { sentiment: SentimentData; watchlist: WatchlistSummaryItem[] }) {
+  const bullets = buildStrategyBullets(sentiment, watchlist);
+
+  return (
+    <Link href="/strategy" className="modern-panel-link">
+      <Card className="modern-dashboard-panel modern-dashboard-panel--strategy home-click-card" title="AI 今日策略" extra={<SolutionOutlined />}>
+        <ul className="modern-strategy-list">
+          {bullets.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </Card>
+    </Link>
+  );
+}
+
+function MarketPulsePanel({
+  sentiment,
+  indices,
+  watchlist,
+}: {
+  sentiment: SentimentData;
+  indices: MarketIndex[];
+  watchlist: WatchlistSummaryItem[];
+}) {
+  const strongestIndex = getStrongestItem(indices);
+  const weakestIndex = getWeakestItem(indices);
+  const strongestWatchlist = getStrongestItem(watchlist);
+  const strategyBullets = buildStrategyBullets(sentiment, watchlist);
+
+  return (
+    <Card className="modern-dashboard-panel modern-dashboard-panel--pulse" title="盘面速览" extra={<StockOutlined />}>
+      <div className="market-pulse-grid">
+        <div className="market-pulse-item">
+          <span className="market-pulse-item__label">最强指数</span>
+          <strong className="market-pulse-item__value">{strongestIndex ? `${strongestIndex.name} ${formatPercent(strongestIndex.changePercent)}` : "暂无数据"}</strong>
+          <span className="market-pulse-item__hint">{strongestIndex ? getIndexComment(strongestIndex) : "等待行情数据返回"}</span>
+        </div>
+        <div className="market-pulse-item">
+          <span className="market-pulse-item__label">风险观察</span>
+          <strong className="market-pulse-item__value">{weakestIndex ? `${weakestIndex.name} ${formatPercent(weakestIndex.changePercent)}` : "暂无数据"}</strong>
+          <span className="market-pulse-item__hint">{weakestIndex ? "弱势指数更容易带来情绪回落" : "等待行情数据返回"}</span>
+        </div>
+        <div className="market-pulse-item">
+          <span className="market-pulse-item__label">自选风向</span>
+          <strong className="market-pulse-item__value">{strongestWatchlist ? `${strongestWatchlist.name} ${formatPercent(strongestWatchlist.changePercent)}` : "先建立自选池"}</strong>
+          <span className="market-pulse-item__hint">{strongestWatchlist ? "先看自选中的强势票是否能继续走强" : "把重点标的加入自选，桌面端更方便并排观察"}</span>
+        </div>
+        <div className="market-pulse-item">
+          <span className="market-pulse-item__label">操作提醒</span>
+          <strong className="market-pulse-item__value">{strategyBullets[0]}</strong>
+          <span className="market-pulse-item__hint">{sentiment.risingCount >= sentiment.fallingCount ? "可以多看主线延续" : "先控制节奏，避免情绪化追涨"}</span>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function IndexTiles({ indices, compact }: { indices: MarketIndex[]; compact?: boolean }) {
+  return (
+    <div className={compact ? "mobile-reference-grid mobile-reference-grid--indices" : "modern-index-grid modern-index-grid--desktop"}>
+      {indices.map((item) => {
+        const color = getPriceColor(item.changePercent);
+
+        return (
+          <Link key={item.code} href={buildPromptChatLink(`${item.name}分析`, buildIndexPrompt(item))} className="modern-panel-link">
+            <Card className="modern-dashboard-panel modern-index-tile home-click-card" title={item.name}>
+              <div className="modern-index-tile__value">{formatPrice(item.price)}</div>
+              <div className="modern-index-tile__change" style={{ color }}>
+                {item.changePercent > 0 ? "▲" : item.changePercent < 0 ? "▼" : "•"}
+                {formatPercent(item.changePercent)}
+              </div>
+              <div className="modern-index-tile__meta">
+                <div>{getIndexComment(item)}</div>
+                <div>{formatTurnoverMeta(item)}</div>
+              </div>
+            </Card>
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+function DesktopIndexSection({ indices, loading }: { indices: MarketIndex[]; loading: boolean }) {
+  if (loading) {
+    return (
+      <Card className="modern-dashboard-panel modern-dashboard-panel--indices">
+        <Skeleton active paragraph={{ rows: 3 }} title={false} />
+      </Card>
+    );
   }
 
-  if (estimate) {
+  if (!indices.length) {
     return (
-      <FundCard
-        fund={estimate}
-        linkTo={`/funds/${code}`}
-      />
+      <Card className="modern-dashboard-panel modern-dashboard-panel--indices">
+        <Empty description="暂无指数数据" />
+      </Card>
     );
   }
 
   return (
-    <FundCard
-      fund={{ code, name, type: "基金", changePercent: 0 }}
-      linkTo={`/funds/${code}`}
-    />
+    <Card className="modern-dashboard-panel modern-dashboard-panel--indices" title="核心指数">
+      <IndexTiles indices={indices} />
+    </Card>
   );
 }
 
-// --- Index Technical Analysis (client-side, based on price levels) ---
-
-interface LevelInfo {
-  price: number;
-  reason: string;
-}
-
-interface IndexLevelAnalysis {
-  name: string;
-  code: string;
-  price: number;
-  changePercent: number;
-  preClose: number;
-  trend: string;
-  trendReason: string;
-  resistances: LevelInfo[];
-  supports: LevelInfo[];
-  notes: string[];
-}
-
-function analyzeIndexLevels(
-  name: string,
-  code: string,
-  price: number,
-  changePercent: number,
-  volume: number,
-  amount: number,
-): IndexLevelAnalysis {
-  const preClose = price / (1 + changePercent / 100);
-
-  // Determine round-number step based on price magnitude
-  const step = price > 10000 ? 500 : price > 3000 ? 100 : 50;
-
-  const supports: LevelInfo[] = [];
-  const resistances: LevelInfo[] = [];
-
-  // Round-number levels (psychological)
-  const nearestRoundBelow = Math.floor(price / step) * step;
-  const nearestRoundAbove = Math.ceil(price / step) * step;
-
-  if (nearestRoundAbove > price * 1.001) {
-    resistances.push({ price: nearestRoundAbove, reason: `${nearestRoundAbove} 整数关口压力` });
-  }
-  if (nearestRoundBelow < price * 0.999) {
-    supports.push({ price: nearestRoundBelow, reason: `${nearestRoundBelow} 整数关口支撑` });
-  }
-
-  // Next round number
-  const nextRoundAbove = nearestRoundAbove + step;
-  if (nextRoundAbove > price) {
-    resistances.push({ price: nextRoundAbove, reason: `${nextRoundAbove} 上方第二关口` });
-  }
-  const nextRoundBelow = nearestRoundBelow - step;
-  if (nextRoundBelow > 0 && nextRoundBelow < price) {
-    supports.push({ price: nextRoundBelow, reason: `${nextRoundBelow} 下方第二关口` });
-  }
-
-  // Yesterday's close as reference
-  const preCloseRound = Math.round(preClose * 100) / 100;
-  if (Math.abs(preCloseRound - price) / price > 0.001) {
-    if (preCloseRound > price) {
-      resistances.push({ price: preCloseRound, reason: "昨日收盘价压力" });
-    } else {
-      supports.push({ price: preCloseRound, reason: "昨日收盘价支撑" });
-    }
-  }
-
-  // Percentage-based levels (±2%, ±3%, ±5%)
-  const up3 = Math.round(preClose * 1.03 * 100) / 100;
-  const down3 = Math.round(preClose * 0.97 * 100) / 100;
-  if (up3 > price) {
-    resistances.push({ price: up3, reason: "日涨3%阻力位" });
-  }
-  if (down3 < price) {
-    supports.push({ price: down3, reason: "日跌3%支撑位" });
-  }
-
-  // Sort and limit
-  const sortedResistances = resistances
-    .filter((r) => r.price > price)
-    .sort((a, b) => a.price - b.price)
-    .slice(0, 3);
-  const sortedSupports = supports
-    .filter((s) => s.price < price)
-    .sort((a, b) => b.price - a.price)
-    .slice(0, 3);
-
-  // Trend
-  let trend: string;
-  let trendReason: string;
-  if (changePercent > 1) {
-    trend = "偏多";
-    trendReason = `今日上涨 ${changePercent.toFixed(2)}%，多方占优，量能${amount > 0 ? "配合" : "待观察"}`;
-  } else if (changePercent < -1) {
-    trend = "偏空";
-    trendReason = `今日下跌 ${changePercent.toFixed(2)}%，空方主导，注意风险控制`;
-  } else if (changePercent > 0) {
-    trend = "震荡偏多";
-    trendReason = `小幅上涨 ${changePercent.toFixed(2)}%，多空拉锯中，方向待确认`;
-  } else if (changePercent < 0) {
-    trend = "震荡偏空";
-    trendReason = `小幅下跌 ${changePercent.toFixed(2)}%，上方压力较重，等待方向`;
-  } else {
-    trend = "平盘";
-    trendReason = "多空平衡，等待突破方向";
-  }
-
-  // Notes
-  const notes: string[] = [];
-  if (Math.abs(price - nearestRoundAbove) / price < 0.005) {
-    notes.push(`逼近 ${nearestRoundAbove} 整数关口，突破放量则打开上行空间`);
-  }
-  if (Math.abs(price - nearestRoundBelow) / price < 0.005) {
-    notes.push(`接近 ${nearestRoundBelow} 整数关口，跌破可能加速下行`);
-  }
-  if (changePercent > 2) {
-    notes.push("涨幅较大，短线注意获利回吐压力");
-  }
-  if (changePercent < -2) {
-    notes.push("跌幅较深，关注是否出现恐慌性抛售或超跌反弹");
-  }
-
-  return {
-    name,
-    code,
-    price,
-    changePercent,
-    preClose: preCloseRound,
-    trend,
-    trendReason,
-    resistances: sortedResistances,
-    supports: sortedSupports,
-    notes,
-  };
-}
-
-function IndexAnalysis() {
-  const { data: indices, isLoading } = useMarketIndices();
-
-  const analysisData = useMemo(() => {
-    if (!indices || indices.length === 0) return [];
-    // Only analyze the main 3 indices
-    const targets = ["000001", "000300", "399006"];
-    return indices
-      .filter((idx) => targets.includes(idx.code))
-      .map((idx) => analyzeIndexLevels(idx.name, idx.code, idx.price, idx.changePercent, idx.volume, idx.amount));
-  }, [indices]);
-
-  const trendIcon = (trend: string) => {
-    if (trend.includes("多")) return <ArrowUpOutlined style={{ color: "#cf1322" }} />;
-    if (trend.includes("空")) return <ArrowDownOutlined style={{ color: "#389e0d" }} />;
-    return <MinusOutlined style={{ color: "#8c8c8c" }} />;
-  };
-
-  const trendColor = (trend: string) => {
-    if (trend.includes("多")) return "red" as const;
-    if (trend.includes("空")) return "green" as const;
-    return "default" as const;
-  };
-
+function HotspotFlowPanel({ items, loading }: { items: AggressiveScanResult[]; loading: boolean }) {
   return (
     <Card
-      title="📐 指数关键价位分析 — 压力位与支撑位"
-      style={{ marginBottom: 16 }}
-    >
-      {isLoading ? (
-        <div style={{ textAlign: "center", padding: 30 }}><Spin tip="加载中..." /></div>
-      ) : analysisData.length > 0 ? (
-        <Row gutter={[16, 16]}>
-          {analysisData.map((idx) => (
-            <Col xs={24} md={8} key={idx.code}>
-              <Card
-                size="small"
-                title={
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    {trendIcon(idx.trend)}
-                    <span style={{ fontWeight: 700 }}>{idx.name}</span>
-                    <Tag color={trendColor(idx.trend)}>{idx.trend}</Tag>
-                  </div>
-                }
-                style={{ height: "100%" }}
-              >
-                <div style={{ marginBottom: 8 }}>
-                  <Text style={{ fontSize: 20, fontWeight: 700, color: getPriceColor(idx.changePercent) }}>
-                    {idx.price.toFixed(2)}
-                  </Text>
-                  <Text style={{ color: getPriceColor(idx.changePercent), marginLeft: 8 }}>
-                    {formatPercent(idx.changePercent)}
-                  </Text>
-                </div>
-
-                <Text type="secondary" style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
-                  {idx.trendReason}
-                </Text>
-
-                {/* Resistance levels */}
-                <div style={{ marginBottom: 8 }}>
-                  <Text strong style={{ fontSize: 13, color: "#389e0d" }}>压力位（上方阻力）</Text>
-                  <div style={{ marginTop: 4 }}>
-                    {idx.resistances.map((r, i) => (
-                      <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}>
-                        <Text style={{ fontSize: 13 }}>{r.reason}</Text>
-                        <Text strong style={{ fontSize: 13, color: "#389e0d" }}>{r.price.toFixed(2)}</Text>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Support levels */}
-                <div style={{ marginBottom: 8 }}>
-                  <Text strong style={{ fontSize: 13, color: "#cf1322" }}>支撑位（下方支撑）</Text>
-                  <div style={{ marginTop: 4 }}>
-                    {idx.supports.map((s, i) => (
-                      <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}>
-                        <Text style={{ fontSize: 13 }}>{s.reason}</Text>
-                        <Text strong style={{ fontSize: 13, color: "#cf1322" }}>{s.price.toFixed(2)}</Text>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Key notes */}
-                {idx.notes.length > 0 && (
-                  <div style={{ marginTop: 4 }}>
-                    {idx.notes.map((note, i) => (
-                      <Alert key={i} type="info" description={note} showIcon style={{ marginBottom: 4, padding: "4px 8px" }} />
-                    ))}
-                  </div>
-                )}
-              </Card>
-            </Col>
-          ))}
-        </Row>
-      ) : (
-        <Text type="secondary">暂无分析数据</Text>
+      className="modern-dashboard-panel modern-dashboard-panel--hotspot"
+      title="热点板块 / 资金风向"
+      extra={(
+        <Link href="/strategy">
+          <Button type="link">查看完整热点策略</Button>
+        </Link>
       )}
+    >
+      <div className="hotspot-flow-panel">
+        <div className="hotspot-flow-panel__topics">
+          <div className="hotspot-flow-panel__section-head">
+            <strong>当前主线热点</strong>
+            <span>优先看热度高、易形成联动的方向</span>
+          </div>
+          <div className="hotspot-topic-grid">
+            {HOTSPOT_TOPICS.map((topic) => (
+              <Link key={topic.keyword} href={`/stocks?keyword=${encodeURIComponent(topic.keyword)}`} className="hotspot-topic-card">
+                <span className="hotspot-topic-card__icon">{topic.icon}</span>
+                <span className="hotspot-topic-card__name">{topic.keyword}</span>
+                <span className="hotspot-topic-card__heat">热度 {topic.heat}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <div className="hotspot-flow-panel__flows">
+          <div className="hotspot-flow-panel__section-head">
+            <strong>活跃资金风向</strong>
+            <span>基于 5-30 元区间高换手标的快速判断资金偏好</span>
+          </div>
+
+          {loading ? (
+            <Skeleton active paragraph={{ rows: 5 }} title={false} />
+          ) : items.length ? (
+            <div className="hotspot-flow-list">
+              {items.slice(0, 5).map((item) => {
+                const color = getPriceColor(item.changePercent);
+                const status = getHotspotFlowStatus(item);
+
+                return (
+                  <Link key={item.code} href={`/stocks/${item.code}?market=${item.market}`} className="hotspot-flow-row">
+                    <div className="hotspot-flow-row__main">
+                      <div className="hotspot-flow-row__title-line">
+                        <strong>{item.name}</strong>
+                        <span>{item.code}</span>
+                        {item.industry ? <em>{item.industry}</em> : null}
+                      </div>
+                      <div className="hotspot-flow-row__meta">{status.hint}</div>
+                    </div>
+                    <div className="hotspot-flow-row__stats">
+                      <div className="hotspot-flow-row__price" style={{ color }}>{formatPrice(item.price)}</div>
+                      <div className="hotspot-flow-row__change" style={{ color }}>{formatPercent(item.changePercent)}</div>
+                      <div className="hotspot-flow-row__turnover">换手 {item.turnoverRate.toFixed(2)}%</div>
+                      <span className={`hotspot-flow-row__badge hotspot-flow-row__badge--${status.tone}`}>{status.label}</span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <Empty description="暂无热点资金数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          )}
+        </div>
+      </div>
     </Card>
+  );
+}
+
+function useWatchlistSummary(items: WatchlistItem[]) {
+  const stockItems = items.filter((item) => item.type === "stock").slice(0, 4);
+  const key = stockItems.length
+    ? `/api/stocks?action=watchlist-summary&items=${encodeURIComponent(JSON.stringify(stockItems.map((item) => ({ code: item.code, name: item.name, market: item.market }))))}`
+    : null;
+
+  const { data, isLoading } = useSWR<Array<{ code: string; name: string; market: number; price: number; changePercent: number }>>(key, fetcher, {
+    refreshInterval: 60000,
+  });
+
+  return {
+    data: data ?? [],
+    isLoading,
+  };
+}
+
+function useHotspotScan() {
+  const { data, isLoading } = useSWR<AggressiveScanResult[]>(
+    "/api/stocks?action=strategy-scan&mode=aggressive&count=6",
+    fetcher,
+    { refreshInterval: 60000 },
+  );
+
+  return {
+    data: data ?? [],
+    isLoading,
+  };
+}
+
+export default function HomePage() {
+  const { data: indices, isLoading: indicesLoading } = useMarketIndices();
+  const { items: watchlist } = useWatchlist();
+  useUser();
+  const { data: watchlistSummary, isLoading: watchlistLoading } = useWatchlistSummary(watchlist);
+  const { data: hotspotScan, isLoading: hotspotLoading } = useHotspotScan();
+
+  const coreIndices = useMemo(() => pickIndices(indices, ["000001", "399001", "399006"], 3), [indices]);
+  const desktopIndices = useMemo(() => pickIndices(indices, ["000001", "399001", "399006", "000300", "000016", "000688"], 6), [indices]);
+  const stockWatchlistCount = watchlist.filter((item) => item.type === "stock").length;
+  const sentiment = getSentiment(coreIndices);
+  const summary = buildTodaySummary(sentiment);
+  const strongestWatchlist = getStrongestItem(watchlistSummary);
+
+  return (
+    <div className="page-container modern-dashboard-page">
+      <section className="modern-dashboard-desktop">
+        <DashboardHero
+          summary={summary}
+          sentiment={sentiment}
+          indices={desktopIndices}
+          watchlistCount={stockWatchlistCount}
+          strongestWatchlist={strongestWatchlist}
+        />
+
+        <div className="modern-dashboard-desktop-grid">
+          <div className="modern-dashboard-desktop-span-5">
+            <AskAIPanel />
+          </div>
+          <div className="modern-dashboard-desktop-span-3">
+            <SentimentPanel sentiment={sentiment} />
+          </div>
+          <div className="modern-dashboard-desktop-span-4">
+            <MarketPulsePanel sentiment={sentiment} indices={desktopIndices} watchlist={watchlistSummary} />
+          </div>
+          <div className="modern-dashboard-desktop-span-7">
+            <WatchlistPanel items={watchlistSummary} loading={watchlistLoading} />
+          </div>
+          <div className="modern-dashboard-desktop-span-5">
+            <StrategyPanel sentiment={sentiment} watchlist={watchlistSummary} />
+          </div>
+        </div>
+
+        <HotspotFlowPanel items={hotspotScan} loading={hotspotLoading} />
+        <DesktopIndexSection indices={desktopIndices} loading={indicesLoading} />
+      </section>
+
+      <section className="modern-dashboard-mobile mobile-reference-dashboard">
+        <DashboardTitle summary={summary} />
+
+        <div className="mobile-reference-grid mobile-reference-grid--cards" style={{ marginBottom: 12 }}>
+          <AskAIPanel />
+          <SentimentPanel sentiment={sentiment} />
+          <WatchlistPanel items={watchlistSummary} loading={watchlistLoading} />
+          <StrategyPanel sentiment={sentiment} watchlist={watchlistSummary} />
+        </div>
+
+        {indicesLoading ? (
+          <Card className="modern-dashboard-panel" style={{ marginBottom: 8 }}>
+            <Skeleton active paragraph={{ rows: 3 }} title={false} />
+          </Card>
+        ) : coreIndices.length ? (
+          <IndexTiles indices={coreIndices} compact />
+        ) : (
+          <Card className="modern-dashboard-panel" style={{ marginBottom: 8 }}>
+            <Empty description="暂无指数数据" />
+          </Card>
+        )}
+      </section>
+
+      <div className="modern-dashboard-footer">
+        投资有风险，AI 分析仅供参考。
+      </div>
+    </div>
   );
 }

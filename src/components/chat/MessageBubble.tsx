@@ -1,15 +1,16 @@
 "use client";
 
 import { Typography } from "antd";
-import { RobotOutlined, UserOutlined } from "@ant-design/icons";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { UIMessage } from "ai";
+import { sanitizeAssistantText } from "@/lib/chat/sanitize";
 
 const { Text } = Typography;
 
 interface MessageBubbleProps {
   message: UIMessage;
+  fontSize?: number;
 }
 
 function getMessageText(message: UIMessage): string {
@@ -19,78 +20,26 @@ function getMessageText(message: UIMessage): string {
     .join("");
 }
 
-export default function MessageBubble({ message }: MessageBubbleProps) {
+export default function MessageBubble({ message, fontSize = 16 }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const text = getMessageText(message);
+  const displayText = isUser ? text : sanitizeAssistantText(text);
+
+  if (!isUser && !displayText) {
+    return null;
+  }
 
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: isUser ? "flex-end" : "flex-start",
-        marginBottom: 16,
-        gap: 8,
-      }}
-    >
-      {!isUser && (
-        <div
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: "50%",
-            background: "#1677ff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-          }}
-        >
-          <RobotOutlined style={{ color: "#fff", fontSize: 20 }} />
-        </div>
-      )}
-
-      <div
-        style={{
-          maxWidth: "75%",
-          padding: "12px 16px",
-          borderRadius: isUser ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-          background: isUser ? "#1677ff" : "#fff",
-          color: isUser ? "#fff" : "#333",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-          fontSize: 16,
-          lineHeight: 1.8,
-          wordBreak: "break-word",
-        }}
-      >
+    <div className="tech-message-row" data-role={isUser ? "user" : "assistant"}>
+      <div className="tech-message-bubble" data-role={isUser ? "user" : "assistant"}>
         {isUser ? (
-          <Text style={{ color: "#fff", fontSize: 16, whiteSpace: "pre-wrap" }}>
-            {text}
-          </Text>
+          <Text style={{ color: "inherit", fontSize, whiteSpace: "pre-wrap", lineHeight: 1.75 }}>{displayText}</Text>
         ) : (
-          <div className="markdown-body" style={{ color: "#333", fontSize: 16 }}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {text}
-            </ReactMarkdown>
+          <div className="markdown-body" style={{ color: "inherit", fontSize }}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayText}</ReactMarkdown>
           </div>
         )}
       </div>
-
-      {isUser && (
-        <div
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: "50%",
-            background: "#52c41a",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-          }}
-        >
-          <UserOutlined style={{ color: "#fff", fontSize: 20 }} />
-        </div>
-      )}
     </div>
   );
 }

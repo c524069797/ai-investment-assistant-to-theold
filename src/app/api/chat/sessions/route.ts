@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { createChatSession, deleteChatSession, getChatSessionById, getChatSessions, updateChatSessionTitle } from "@/lib/db";

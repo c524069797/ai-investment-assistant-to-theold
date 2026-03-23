@@ -1,22 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserByUsername } from "@/lib/db";
-import { hashPassword, createSessionToken, SESSION_COOKIE } from "@/lib/auth";
+import { createSessionToken, SESSION_COOKIE } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   try {
-    const { username, password } = await request.json();
+    const { username } = await request.json();
 
-    if (!username || !password) {
-      return NextResponse.json({ success: false, error: "请输入账号和密码" }, { status: 400 });
+    if (!username) {
+      return NextResponse.json({ success: false, error: "请选择角色" }, { status: 400 });
+    }
+
+    if (username === "guest") {
+      return NextResponse.json({ success: false, error: "游客模式已关闭，请选择角色或先注册" }, { status: 400 });
     }
 
     const user = await getUserByUsername(username);
     if (!user) {
-      return NextResponse.json({ success: false, error: "账号不存在" }, { status: 401 });
-    }
-
-    if (user.passwordHash !== hashPassword(password)) {
-      return NextResponse.json({ success: false, error: "密码错误" }, { status: 401 });
+      return NextResponse.json({ success: false, error: "角色不存在" }, { status: 401 });
     }
 
     const token = createSessionToken(user.id);

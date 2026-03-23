@@ -13,7 +13,7 @@ import remarkGfm from "remark-gfm";
 import FundChart from "@/components/fund/FundChart";
 import type { FundEstimate, FundHistoryNav, FundDetail } from "@/types/fund";
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Text } = Typography;
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);

@@ -134,7 +134,7 @@ export default function WatchlistInsightCard({ code, name, market, compact = fal
         </Space>
       }
       title={
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Space wrap>
             <a href={getTonghuashunStockUrl(data.code)} target="_blank" rel="noreferrer">
               <Title level={compact ? 5 : 4} style={{ margin: 0 }}>{data.name}</Title>

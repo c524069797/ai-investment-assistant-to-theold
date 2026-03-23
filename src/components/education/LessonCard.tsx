@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, Typography, Tag } from "antd";
+import { Card, Tag, Typography } from "antd";
 import Link from "next/link";
 
 const { Title, Text } = Typography;
@@ -16,24 +16,22 @@ interface LessonCardProps {
 
 export default function LessonCard({ id, title, description, icon, order, completed }: LessonCardProps) {
   return (
-    <Link href={`/education/${id}`}>
-      <Card
-        hoverable
-        style={{ height: "100%" }}
-        styles={{ body: { padding: "20px 24px" } }}
-      >
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
-          <span style={{ fontSize: 40 }}>{icon}</span>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-              <Tag color="blue">第{order}课</Tag>
-              {completed && <Tag color="green">已学习</Tag>}
-            </div>
-            <Title level={5} style={{ margin: "4px 0", fontSize: 18 }}>
-              {title}
-            </Title>
-            <Text style={{ color: "#666", fontSize: 15 }}>{description}</Text>
+    <Link href={`/education/${id}`} className="education-lesson-link">
+      <Card hoverable className="education-lesson-card" styles={{ body: { padding: 20, height: "100%" } }}>
+        <div className="education-lesson-card__head">
+          <div className="education-lesson-card__icon">{icon}</div>
+          <div className="education-lesson-card__tags">
+            <Tag color="red">第{order}课</Tag>
+            {completed ? <Tag color="green">已学习</Tag> : <Tag>待学习</Tag>}
           </div>
+        </div>
+
+        <Title level={4} className="education-lesson-card__title">{title}</Title>
+        <Text className="education-lesson-card__desc">{description}</Text>
+
+        <div className="education-lesson-card__footer">
+          <span>查看课程</span>
+          <span>→</span>
         </div>
       </Card>
     </Link>

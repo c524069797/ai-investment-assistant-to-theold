@@ -3,6 +3,8 @@ import "./globals.css";
 import AntdProvider from "@/components/layout/AntdProvider";
 import AppHeader from "@/components/layout/AppHeader";
 import BottomNav from "@/components/layout/BottomNav";
+import ChunkErrorHandler from "@/components/layout/ChunkErrorHandler";
+import NavigationAgent from "@/components/layout/NavigationAgent";
 
 export const metadata: Metadata = {
   title: "A股智能投资助手",
@@ -18,8 +20,10 @@ export default function RootLayout({
     <html lang="zh-CN">
       <body>
         <AntdProvider>
+          <ChunkErrorHandler />
           <AppHeader />
           <main className="main-content">{children}</main>
+          <NavigationAgent />
           <BottomNav />
         </AntdProvider>
       </body>

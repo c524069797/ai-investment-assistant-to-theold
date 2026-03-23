@@ -31,7 +31,7 @@ export default function StrategyPage() {
   const [searchKeyword, setSearchKeyword] = useState("");
 
   return (
-    <div className="page-container">
+    <div className="page-container strategy-page">
       <Title level={3}>🎯 策略筛选</Title>
 
       {/* Mode Selector */}

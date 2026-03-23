@@ -8,7 +8,7 @@ export async function GET() {
     const users = await getAllUsers();
     return NextResponse.json({ success: true, data: users });
   } catch (error) {
-    console.error("[/api/users] Error:", error);
+    console.error("[/api/auth/accounts] Error:", error);
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : "Database error" },
       { status: 500 },
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: user });
   } catch (error) {
-    console.error("[/api/users] Error:", error);
+    console.error("[/api/auth/accounts] Error:", error);
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : "Database error" },
       { status: 500 },

@@ -6,39 +6,43 @@ import {
   Alert,
   Button,
   Card,
+  Drawer,
   Empty,
+  Grid,
   Input,
   List,
   Popconfirm,
-  Space,
   Spin,
-  Tag,
   Typography,
 } from "antd";
 import {
+  AudioOutlined,
   DeleteOutlined,
   EditOutlined,
   MessageOutlined,
+  PictureOutlined,
   PlusOutlined,
   RobotOutlined,
   SaveOutlined,
   SearchOutlined,
   SendOutlined,
 } from "@ant-design/icons";
-import { useRef, useEffect, useState, useMemo, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
 import { useUser } from "@/lib/hooks/useUser";
+import { useFontSize } from "@/components/layout/AntdProvider";
 import MessageBubble from "./MessageBubble";
 
 const { Text, Title } = Typography;
+const { useBreakpoint } = Grid;
 
 const QUICK_QUESTIONS = [
-  "今日大盘怎么样？",
-  "帮我查查贵州茅台的行情",
-  "什么是基金？",
-  "投资股票风险大吗？",
-  "推荐适合新手的基金类型",
-  "帮我做个风险评估",
+  "请用通俗方式分析今天A股大盘情绪、强弱方向和重点风险。",
+  "帮我看看今天科技、消费、红利谁更强。",
+  "但斌老师今天怎么分析？",
+  "林园老师今天怎么看白酒？",
+  "大V今天整体偏多还是偏谨慎？",
+  "帮我做个风险评估。",
 ];
 
 interface ChatSessionSummary {
@@ -80,28 +84,154 @@ function buildStockSessionTitle(code: string, name?: string) {
   return name ? `${name}分析` : `${code}分析`;
 }
 
+function SessionList({
+  filteredSessions,
+  selectedSessionId,
+  searchKeyword,
+  setSearchKeyword,
+  sessionError,
+  loadingSessions,
+  editingSessionId,
+  editingTitle,
+  setEditingSessionId,
+  setEditingTitle,
+  renameSession,
+  removeSession,
+  setSelectedSessionId,
+  onCreateSession,
+  creatingSession,
+  onSelectSession,
+  isMobile,
+}: {
+  filteredSessions: ChatSessionSummary[];
+  selectedSessionId: string;
+  searchKeyword: string;
+  setSearchKeyword: (value: string) => void;
+  sessionError: string;
+  loadingSessions: boolean;
+  editingSessionId: string;
+  editingTitle: string;
+  setEditingSessionId: (value: string) => void;
+  setEditingTitle: (value: string) => void;
+  renameSession: (sessionId: string, title: string) => Promise<void>;
+  removeSession: (sessionId: string) => Promise<void>;
+  setSelectedSessionId: (value: string) => void;
+  onCreateSession: () => void;
+  creatingSession: boolean;
+  onSelectSession?: () => void;
+  isMobile: boolean;
+}) {
+  return (
+    <div className="chat-history-panel">
+      <Button className="chat-history-panel__new" type="primary" icon={<PlusOutlined />} onClick={onCreateSession} loading={creatingSession}>
+        {isMobile ? "新建对话" : "New Chat"}
+      </Button>
+      <div className="chat-history-panel__title">{isMobile ? "历史对话" : "Chat History"}</div>
+      <Input
+        allowClear
+        prefix={<SearchOutlined />}
+        placeholder="搜索历史对话"
+        value={searchKeyword}
+        onChange={(event) => setSearchKeyword(event.target.value)}
+        className="chat-history-panel__search"
+      />
+      {sessionError && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="会话加载异常"
+          description={sessionError}
+        />
+      )}
+      {loadingSessions ? (
+        <div style={{ textAlign: "center", padding: 32 }}><Spin /></div>
+      ) : filteredSessions.length ? (
+        <List
+          dataSource={filteredSessions}
+          className="chat-history-list"
+          renderItem={(item) => (
+            <List.Item className="chat-session-item" data-active={item.id === selectedSessionId}>
+              {editingSessionId === item.id ? (
+                <div className="chat-session-item__edit">
+                  <Input
+                    value={editingTitle}
+                    onChange={(event) => setEditingTitle(event.target.value)}
+                    onPressEnter={() => renameSession(item.id, editingTitle.trim() || item.title)}
+                  />
+                  <div className="chat-session-item__actions">
+                    <Button size="small" type="primary" icon={<SaveOutlined />} onClick={() => renameSession(item.id, editingTitle.trim() || item.title)}>
+                      保存
+                    </Button>
+                    <Button size="small" onClick={() => { setEditingSessionId(""); setEditingTitle(""); }}>
+                      取消
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="chat-session-item__content">
+                  <button
+                    className="chat-session-item__main"
+                    onClick={() => {
+                      setSelectedSessionId(item.id);
+                      onSelectSession?.();
+                    }}
+                  >
+                    <span className="chat-session-item__name">{item.title}</span>
+                    <span className="chat-session-item__preview">{item.preview ? item.preview.slice(0, 38) : "继续你的投资问题"}</span>
+                  </button>
+                  <div className="chat-session-item__actions">
+                    <Button
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={() => {
+                        setEditingSessionId(item.id);
+                        setEditingTitle(item.title);
+                      }}
+                    >
+                      重命名
+                    </Button>
+                    <Popconfirm title="确定删除这条会话吗？" description="删除后无法恢复" onConfirm={() => removeSession(item.id)} okText="删除" cancelText="取消">
+                      <Button size="small" danger icon={<DeleteOutlined />}>删除</Button>
+                    </Popconfirm>
+                  </div>
+                </div>
+              )}
+            </List.Item>
+          )}
+        />
+      ) : (
+        <Empty description={searchKeyword ? "没有匹配的对话" : "暂无历史对话"} />
+      )}
+    </div>
+  );
+}
+
 function ConversationPanel({
   sessionId,
   initialMessages,
   initialPrompt,
   onConversationChange,
+  selectedTitle,
+  onOpenHistory,
+  isMobile,
 }: {
   sessionId: string;
   initialMessages: UIMessage[];
   initialPrompt?: string;
   onConversationChange: () => void;
+  selectedTitle?: string;
+  onOpenHistory?: () => void;
+  isMobile: boolean;
 }) {
   const [input, setInput] = useState("");
   const [chatError, setChatError] = useState("");
+  const { fontSize, increase, decrease, reset } = useFontSize();
   const autoPromptSentRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const transport = useMemo(
-    () =>
-      new TextStreamChatTransport({
-        api: "/api/chat",
-        body: { sessionId },
-      }),
+    () => new TextStreamChatTransport({ api: "/api/chat", body: { sessionId } }),
     [sessionId],
   );
 
@@ -126,7 +256,7 @@ function ConversationPanel({
   }, [messages, isLoading]);
 
   useEffect(() => {
-    if (initialPrompt && !autoPromptSentRef.current && initialMessages.length === 0) {
+    if (initialPrompt && !autoPromptSentRef.current && !initialMessages.length) {
       autoPromptSentRef.current = true;
       sendMessage({ text: initialPrompt });
     }
@@ -138,8 +268,8 @@ function ConversationPanel({
     setInput("");
   };
 
-  const handleSubmit = (e?: { preventDefault?: () => void }) => {
-    e?.preventDefault?.();
+  const handleSubmit = (event?: { preventDefault?: () => void }) => {
+    event?.preventDefault?.();
     if (!input.trim()) return;
     setChatError("");
     sendMessage({ text: input });
@@ -148,100 +278,96 @@ function ConversationPanel({
 
   return (
     <div
-      className="chat-conversation-panel"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "calc(100vh - 64px - 72px)",
-        background: "#fff",
-        borderRadius: 16,
-        border: "1px solid #eef2f7",
-        overflow: "hidden",
-      }}
+      className="chat-conversation-panel tech-chat-shell chat-reference-shell"
+      style={{ "--chat-font-scale": String(fontSize / 16) } as CSSProperties}
     >
-      <div
-        ref={scrollRef}
-        className="chat-messages-area"
-        style={{
-          flex: 1,
-          overflow: "auto",
-          padding: "16px",
-          background: "#f8fafc",
-        }}
-      >
-        {messages.length === 0 && (
-          <div style={{ textAlign: "center", padding: "40px 16px" }}>
-            <RobotOutlined style={{ fontSize: 64, color: "#1677ff", marginBottom: 16 }} />
-            <Title level={3}>您好！我是小智 🤖</Title>
-            <Text style={{ fontSize: 16, color: "#666" }}>
-              我会把本次对话自动保存，方便您下次继续追问。
-              <br />
-              可以直接问个股、基金、指数，或者点下面的快捷问题开始。
-            </Text>
-            <div style={{ marginTop: 24, display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
-              {QUICK_QUESTIONS.map((q) => (
-                <Tag
-                  key={q}
-                  color="blue"
-                  style={{ cursor: "pointer", padding: "8px 16px", fontSize: 16, borderRadius: 20 }}
-                  onClick={() => handleQuickQuestion(q)}
-                >
-                  {q}
-                </Tag>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {messages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
-        ))}
-
-        {chatError && (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 16 }}
-            message="AI 助手本次响应异常"
-            description={chatError}
-          />
-        )}
-
-        {isLoading && (
-          <div style={{ textAlign: "center", padding: 16 }}>
-            <Spin size="small" />
-            <Text style={{ marginLeft: 8, color: "#999" }}>小智正在思考...</Text>
-          </div>
-        )}
+      <div className="chat-reference-shell__topbar">
+        <div className="chat-reference-shell__brand">
+          {isMobile ? (
+            <Button className="chat-history-trigger" icon={<MessageOutlined />} onClick={onOpenHistory}>
+              历史
+            </Button>
+          ) : null}
+          <Title level={2} className="chat-reference-shell__title">AI Investment Assistant</Title>
+        </div>
+        <div className="chat-reference-shell__font-tools">
+          <Button className="chat-font-btn" onClick={decrease}>A-</Button>
+          <Button className="chat-font-btn chat-font-btn--active" onClick={reset}>Tt</Button>
+          <Button className="chat-font-btn" onClick={increase}>A+</Button>
+        </div>
       </div>
 
-      <div style={{ padding: "12px 16px", borderTop: "1px solid #f0f0f0", background: "#fff" }}>
-        <form onSubmit={handleSubmit}>
-          <Space.Compact style={{ width: "100%" }}>
-            <Input
-              size="large"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="请输入您的问题..."
-              style={{ fontSize: 18 }}
-              onPressEnter={(e) => {
-                if (!e.shiftKey) {
-                  e.preventDefault();
-                  handleSubmit();
-                }
-              }}
+      <div ref={scrollRef} className="chat-messages-area tech-chat-shell__body chat-reference-shell__body">
+        <div className="chat-messages-stack">
+          {selectedTitle ? <div className="chat-session-caption">当前会话：{selectedTitle}</div> : null}
+
+          {!messages.length && (
+            <div className="chat-empty-state chat-empty-state--redesign">
+              <div className="chat-empty-state__icon">
+                <RobotOutlined />
+              </div>
+              <Title level={3}>你好，我是你的投资助手</Title>
+              <Text className="chat-empty-state__desc">
+                你可以直接问大盘、板块、个股、自选和大V观点，我会把对话自动存进左侧历史列表。
+              </Text>
+              <div className="chat-quick-grid chat-quick-grid--stack">
+                {QUICK_QUESTIONS.map((question) => (
+                  <button key={question} className="chat-quick-chip chat-quick-chip--red" onClick={() => handleQuickQuestion(question)}>
+                    {question}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {messages.map((message) => (
+            <MessageBubble key={message.id} message={message} fontSize={fontSize} />
+          ))}
+
+          {chatError && (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message="AI 助手本次响应异常"
+              description={chatError}
             />
-            <Button
-              type="primary"
-              size="large"
-              htmlType="submit"
-              icon={<SendOutlined />}
-              loading={isLoading}
-              style={{ height: 48 }}
-            >
-              发送
-            </Button>
-          </Space.Compact>
+          )}
+
+          {isLoading && (
+            <div className="tech-chat-loading chat-reference-shell__loading">
+              <Spin size="small" />
+              <Text style={{ color: "var(--text-secondary)" }}>小智正在整理最新分析...</Text>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="tech-chat-shell__composer chat-reference-shell__composer">
+        <button type="button" className="chat-composer-side-btn" title="语音功能稍后接入">
+          <AudioOutlined />
+        </button>
+        <button type="button" className="chat-composer-side-btn" title="图片上传功能稍后接入">
+          <PictureOutlined />
+        </button>
+        <form className="chat-composer-form" onSubmit={handleSubmit}>
+          <Input
+            size="large"
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            placeholder="输入您的问题或上传股票截图..."
+            className="chat-composer-input"
+            style={{ fontSize }}
+            onPressEnter={(event) => {
+              if (!event.shiftKey) {
+                event.preventDefault();
+                handleSubmit();
+              }
+            }}
+          />
+          <Button type="primary" size="large" htmlType="submit" icon={<SendOutlined />} loading={isLoading} className="chat-send-btn">
+            Send
+          </Button>
         </form>
       </div>
     </div>
@@ -250,7 +376,10 @@ function ConversationPanel({
 
 export default function ChatWindow() {
   const { currentUser, isLoading: userLoading } = useUser();
+  const { fontSize } = useFontSize();
   const searchParams = useSearchParams();
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
   const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
@@ -262,7 +391,9 @@ export default function ChatWindow() {
   const [editingSessionId, setEditingSessionId] = useState("");
   const [editingTitle, setEditingTitle] = useState("");
   const [pendingPrompt, setPendingPrompt] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
   const handledStockRef = useRef("");
+  const handledPromptRef = useRef("");
 
   const loadSessions = useCallback(async () => {
     if (!currentUser) return;
@@ -271,7 +402,7 @@ export default function ChatWindow() {
       const data = await fetchJson<ChatSessionSummary[]>("/api/chat/sessions");
       setSessionError("");
       setSessions(data);
-      if (data.length > 0) {
+      if (data.length) {
         setSelectedSessionId((prev) => (prev && data.some((item) => item.id === prev) ? prev : data[0].id));
       } else {
         setSelectedSessionId("");
@@ -322,7 +453,7 @@ export default function ChatWindow() {
       setSelectedSessionId(remaining[0]?.id ?? "");
       setInitialMessages([]);
     }
-    if (remaining.length === 0) {
+    if (!remaining.length) {
       await createSession();
     } else {
       await loadSessions();
@@ -338,7 +469,7 @@ export default function ChatWindow() {
   }, [currentUser, userLoading, loadSessions]);
 
   useEffect(() => {
-    if (!userLoading && currentUser && !loadingSessions && sessions.length === 0 && !creatingSession) {
+    if (!userLoading && currentUser && !loadingSessions && !sessions.length && !creatingSession) {
       createSession().catch(() => {});
     }
   }, [currentUser, userLoading, loadingSessions, sessions.length, creatingSession, createSession]);
@@ -379,137 +510,105 @@ export default function ChatWindow() {
       });
   }, [searchParams, currentUser, loadingSessions, creatingSession, createSession]);
 
+  useEffect(() => {
+    const prompt = searchParams.get("prompt")?.trim() ?? "";
+    const title = searchParams.get("title")?.trim() ?? "快捷分析";
+    const promptKey = `${title}-${prompt}`;
+    if (!prompt || !currentUser || loadingSessions || creatingSession || handledPromptRef.current === promptKey) {
+      return;
+    }
+
+    handledPromptRef.current = promptKey;
+    createSession(title)
+      .then((session) => {
+        if (session) {
+          setSelectedSessionId(session.id);
+          setPendingPrompt(prompt);
+        }
+      })
+      .catch(() => {
+        handledPromptRef.current = "";
+      });
+  }, [searchParams, currentUser, loadingSessions, creatingSession, createSession]);
+
+  useEffect(() => {
+    if (!isMobile) {
+      setHistoryOpen(false);
+    }
+  }, [isMobile]);
+
+  useEffect(() => {
+    document.body.classList.add("chat-page-active");
+    if (isMobile) {
+      document.body.classList.add("chat-page-mobile");
+    } else {
+      document.body.classList.remove("chat-page-mobile");
+    }
+
+    return () => {
+      document.body.classList.remove("chat-page-active");
+      document.body.classList.remove("chat-page-mobile");
+    };
+  }, [isMobile]);
+
   const filteredSessions = useMemo(() => {
     const keyword = searchKeyword.trim().toLowerCase();
     if (!keyword) return sessions;
-    return sessions.filter((item) =>
-      item.title.toLowerCase().includes(keyword) || item.preview.toLowerCase().includes(keyword),
-    );
+    return sessions.filter((item) => item.title.toLowerCase().includes(keyword) || item.preview.toLowerCase().includes(keyword));
   }, [sessions, searchKeyword]);
+
+  const selectedSession = sessions.find((item) => item.id === selectedSessionId);
 
   if (userLoading) {
     return <div style={{ textAlign: "center", padding: 80 }}><Spin /></div>;
   }
 
+  const historyContent = (
+    <SessionList
+      filteredSessions={filteredSessions}
+      selectedSessionId={selectedSessionId}
+      searchKeyword={searchKeyword}
+      setSearchKeyword={setSearchKeyword}
+      sessionError={sessionError}
+      loadingSessions={loadingSessions}
+      editingSessionId={editingSessionId}
+      editingTitle={editingTitle}
+      setEditingSessionId={setEditingSessionId}
+      setEditingTitle={setEditingTitle}
+      renameSession={renameSession}
+      removeSession={removeSession}
+      setSelectedSessionId={setSelectedSessionId}
+      onCreateSession={() => createSession().then(() => setHistoryOpen(false))}
+      creatingSession={creatingSession}
+      onSelectSession={() => setHistoryOpen(false)}
+      isMobile={isMobile}
+    />
+  );
+
   return (
-    <div style={{ maxWidth: 1180, margin: "0 auto" }}>
-      <div className="chat-layout" style={{ display: "grid", gridTemplateColumns: "300px minmax(0, 1fr)", gap: 16, padding: "0 16px 16px" }}>
-        <Card
-          title="历史对话"
-          extra={
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => createSession()} loading={creatingSession}>
-              新建
-            </Button>
-          }
-          className="chat-sidebar-card"
-          style={{ borderRadius: 16 }}
-          styles={{ body: { padding: 12 } }}
-        >
-          <Input
-            allowClear
-            prefix={<SearchOutlined />}
-            placeholder="搜索历史对话"
-            value={searchKeyword}
-            onChange={(e) => setSearchKeyword(e.target.value)}
-            style={{ marginBottom: 12 }}
-          />
-
-          {sessionError && (
-            <Alert
-              type="warning"
-              showIcon
-              style={{ marginBottom: 12 }}
-              message="会话加载异常"
-              description={sessionError}
-            />
-          )}
-
-          {loadingSessions ? (
-            <div style={{ textAlign: "center", padding: 32 }}><Spin /></div>
-          ) : filteredSessions.length === 0 ? (
-            <Empty description={searchKeyword ? "没有匹配的对话" : "暂无历史对话"} />
-          ) : (
-            <List
-              dataSource={filteredSessions}
-              renderItem={(item) => (
-                <List.Item
-                  style={{
-                    display: "block",
-                    borderRadius: 12,
-                    padding: 12,
-                    marginBottom: 8,
-                    border: item.id === selectedSessionId ? "1px solid #1677ff" : "1px solid #eef2f7",
-                    background: item.id === selectedSessionId ? "#f0f7ff" : "#fff",
-                  }}
-                >
-                  {editingSessionId === item.id ? (
-                    <Space direction="vertical" style={{ width: "100%" }}>
-                      <Input
-                        value={editingTitle}
-                        onChange={(e) => setEditingTitle(e.target.value)}
-                        onPressEnter={() => renameSession(item.id, editingTitle.trim() || item.title)}
-                      />
-                      <Space>
-                        <Button size="small" type="primary" icon={<SaveOutlined />} onClick={() => renameSession(item.id, editingTitle.trim() || item.title)}>
-                          保存
-                        </Button>
-                        <Button size="small" onClick={() => { setEditingSessionId(""); setEditingTitle(""); }}>
-                          取消
-                        </Button>
-                      </Space>
-                    </Space>
-                  ) : (
-                    <div>
-                      <div
-                        onClick={() => setSelectedSessionId(item.id)}
-                        style={{ cursor: "pointer" }}
-                      >
-                        <Space style={{ width: "100%", justifyContent: "space-between" }}>
-                          <Text strong ellipsis style={{ maxWidth: 180 }}>{item.title}</Text>
-                          <MessageOutlined style={{ color: "#8c8c8c" }} />
-                        </Space>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          {item.preview ? item.preview.slice(0, 32) : "继续你的投资问题"}
-                        </Text>
-                      </div>
-                      <Space style={{ marginTop: 8 }}>
-                        <Button
-                          size="small"
-                          icon={<EditOutlined />}
-                          onClick={() => {
-                            setEditingSessionId(item.id);
-                            setEditingTitle(item.title);
-                          }}
-                        >
-                          重命名
-                        </Button>
-                        <Popconfirm
-                          title="确定删除这条会话吗？"
-                          description="删除后无法恢复"
-                          onConfirm={() => removeSession(item.id)}
-                          okText="删除"
-                          cancelText="取消"
-                        >
-                          <Button size="small" danger icon={<DeleteOutlined />}>删除</Button>
-                        </Popconfirm>
-                      </Space>
-                    </div>
-                  )}
-                </List.Item>
-              )}
-            />
-          )}
-        </Card>
+    <div
+      className={`chat-page-shell chat-page-shell--reference ${isMobile ? "chat-page-shell--mobile" : ""}`}
+      style={{ "--chat-font-scale": String(fontSize / 16) } as CSSProperties}
+    >
+      <div className={`chat-layout ${isMobile ? "chat-layout--mobile" : "chat-layout--desktop"}`}>
+        {!isMobile && (
+          <Card className="chat-sidebar-card chat-sidebar-card--reference" styles={{ body: { padding: 12, height: "100%" } }}>
+            {historyContent}
+          </Card>
+        )}
 
         {selectedSessionId ? (
           loadingMessages ? (
-            <div style={{ textAlign: "center", padding: 80 }}><Spin /></div>
+            <div className="chat-loading-panel"><Spin size="large" /></div>
           ) : (
             <ConversationPanel
               key={`${selectedSessionId}-${initialMessages.length}-${pendingPrompt}`}
               sessionId={selectedSessionId}
               initialMessages={initialMessages}
               initialPrompt={pendingPrompt || undefined}
+              selectedTitle={selectedSession?.title}
+              isMobile={isMobile}
+              onOpenHistory={() => setHistoryOpen(true)}
               onConversationChange={() => {
                 setPendingPrompt("");
                 loadSessions();
@@ -517,9 +616,22 @@ export default function ChatWindow() {
             />
           )
         ) : (
-          <div style={{ textAlign: "center", padding: 80 }}><Spin /></div>
+          <div className="chat-loading-panel"><Spin size="large" /></div>
         )}
       </div>
+
+      {isMobile && (
+        <Drawer
+          title="历史对话"
+          placement="left"
+          width="82vw"
+          open={historyOpen}
+          onClose={() => setHistoryOpen(false)}
+          styles={{ body: { padding: 12 } }}
+        >
+          {historyContent}
+        </Drawer>
+      )}
     </div>
   );
 }

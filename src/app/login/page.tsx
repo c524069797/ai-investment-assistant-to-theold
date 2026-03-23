@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Card, Input, Button, Typography, Space, message, Spin } from "antd";
-import { UserOutlined, LockOutlined, StockOutlined } from "@ant-design/icons";
+import { useCallback, useEffect, useState } from "react";
+import { Button, Card, Empty, Spin, Typography, message } from "antd";
+import { PlusOutlined, StockOutlined } from "@ant-design/icons";
+import Link from "next/link";
 
 const { Title, Text } = Typography;
 
@@ -12,33 +13,60 @@ interface AccountOption {
   avatar: string;
 }
 
-const ACCOUNTS: AccountOption[] = [
+const DEFAULT_ACCOUNTS: AccountOption[] = [
   { username: "baba", name: "爸爸", avatar: "👨" },
   { username: "mama", name: "妈妈", avatar: "👩" },
 ];
 
 export default function LoginPage() {
-  const [selected, setSelected] = useState<string | null>(null);
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [accounts, setAccounts] = useState<AccountOption[]>([]);
+  const [selected, setSelected] = useState("");
+  const [loadingUser, setLoadingUser] = useState("");
   const [redirecting, setRedirecting] = useState(false);
+  const [loadingAccounts, setLoadingAccounts] = useState(true);
+  const [accountsError, setAccountsError] = useState("");
 
-  const handleLogin = async () => {
-    if (!selected) {
-      message.warning("请先选择账号");
+  const loadAccounts = useCallback(async () => {
+    setLoadingAccounts(true);
+    setAccountsError("");
+
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 25000);
+      const res = await fetch("/api/auth/accounts", { signal: controller.signal });
+      clearTimeout(timer);
+      const json = await res.json();
+
+      if (json.success && Array.isArray(json.data) && json.data.length) {
+        setAccounts(json.data);
+        return;
+      }
+
+      setAccounts(DEFAULT_ACCOUNTS);
+    } catch {
+      setAccounts(DEFAULT_ACCOUNTS);
+    } finally {
+      setLoadingAccounts(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAccounts();
+  }, [loadAccounts]);
+
+  const handleLogin = async (username: string) => {
+    if (loadingUser) {
       return;
     }
-    if (!password) {
-      message.warning("请输入密码");
-      return;
-    }
 
-    setLoading(true);
+    setSelected(username);
+    setLoadingUser(username);
+
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: selected, password }),
+        body: JSON.stringify({ username }),
       });
       const json = await res.json();
 
@@ -46,13 +74,14 @@ export default function LoginPage() {
         message.success(`欢迎回来，${json.data.name}！`);
         setRedirecting(true);
         window.location.href = "/";
-      } else {
-        message.error(json.error || "登录失败");
+        return;
       }
+
+      message.error(json.error || "进入失败");
     } catch {
       message.error("网络错误，请稍后重试");
     } finally {
-      setLoading(false);
+      setLoadingUser("");
     }
   };
 
@@ -63,7 +92,7 @@ export default function LoginPage() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "radial-gradient(circle at top, #f7f9fc 0%, #f3f6fb 55%, #eef2f7 100%)",
+        background: "var(--page-bg)",
         padding: 16,
       }}
     >
@@ -72,7 +101,7 @@ export default function LoginPage() {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(255,255,255,0.72)",
+            background: "var(--overlay-bg)",
             backdropFilter: "blur(4px)",
             display: "flex",
             alignItems: "center",
@@ -83,83 +112,99 @@ export default function LoginPage() {
           }}
         >
           <Spin size="large" />
-          <Text style={{ fontSize: 16, color: "#334155" }}>登录成功，正在进入首页...</Text>
+          <Text style={{ fontSize: 16, color: "var(--text-main)" }}>正在进入首页...</Text>
         </div>
       )}
       <Card
         style={{
           width: "100%",
-          maxWidth: 420,
-          borderRadius: 20,
-          boxShadow: "0 20px 40px rgba(15, 23, 42, 0.12)",
+          maxWidth: 520,
+          borderRadius: 24,
+          boxShadow: "var(--panel-shadow)",
+          border: "1px solid var(--panel-border)",
+          background: "var(--panel-bg)",
         }}
       >
-        <div style={{ textAlign: "center", marginBottom: 32 }}>
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
           <StockOutlined style={{ fontSize: 48, color: "#2b56c2", marginBottom: 12 }} />
-          <Title level={3} style={{ margin: 0 }}>AI 智能投资助手</Title>
-          <Text type="secondary">请选择账号登录</Text>
+          <Title level={3} style={{ margin: 0, color: "var(--text-main)" }}>AI 智能投资助手</Title>
+          <Text type="secondary">请选择角色登录，或先注册一个新身份</Text>
         </div>
 
-        {/* Account Selection */}
-        <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
-          {ACCOUNTS.map((acc) => (
-            <div
-              key={acc.username}
-              onClick={() => setSelected(acc.username)}
-              style={{
-                flex: 1,
-                padding: "20px 12px",
-                borderRadius: 14,
-                border: selected === acc.username
-                  ? "2px solid #2b56c2"
-                  : "2px solid #e7edf4",
-                background: selected === acc.username
-                  ? "linear-gradient(135deg, #eef2ff 0%, #dbeafe 100%)"
-                  : "#fafbfc",
-                cursor: "pointer",
-                textAlign: "center",
-                transition: "all 0.2s",
-              }}
-            >
-              <div style={{ fontSize: 40, marginBottom: 8 }}>{acc.avatar}</div>
-              <div style={{ fontWeight: 700, fontSize: 18 }}>{acc.name}</div>
-              <div style={{ fontSize: 13, color: "#6d7891" }}>{acc.username}</div>
-            </div>
-          ))}
-        </div>
+        {loadingAccounts ? (
+          <div style={{ textAlign: "center", padding: "24px 0" }}>
+            <Spin />
+          </div>
+        ) : accountsError ? (
+          <div style={{ textAlign: "center", padding: "12px 0 4px" }}>
+            <Empty description={accountsError} style={{ marginBottom: 12 }} />
+            <Button onClick={loadAccounts}>重新加载</Button>
+          </div>
+        ) : accounts.length ? (
+          <div style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+            {accounts.map((acc) => {
+              const active = selected === acc.username;
+              const pending = loadingUser === acc.username;
 
-        {/* Password Input */}
-        <Space direction="vertical" size={16} style={{ width: "100%" }}>
-          <Input.Password
-            prefix={<LockOutlined />}
-            placeholder="请输入密码"
-            size="large"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onPressEnter={handleLogin}
-            style={{ borderRadius: 10, height: 48 }}
-          />
+              return (
+                <button
+                  key={acc.username}
+                  type="button"
+                  onClick={() => handleLogin(acc.username)}
+                  disabled={!!loadingUser}
+                  style={{
+                    flex: "1 1 140px",
+                    padding: "20px 12px",
+                    borderRadius: 14,
+                    border: active
+                      ? "2px solid var(--accent-strong)"
+                      : "2px solid var(--panel-border)",
+                    background: active
+                      ? "var(--accent-surface)"
+                      : "var(--card-muted)",
+                    cursor: loadingUser ? "not-allowed" : "pointer",
+                    textAlign: "center",
+                    transition: "all 0.2s",
+                    appearance: "none",
+                    WebkitAppearance: "none",
+                    color: "var(--text-main)",
+                  }}
+                >
+                  <div style={{ fontSize: 40, marginBottom: 8 }}>{pending ? "⏳" : acc.avatar}</div>
+                  <div style={{ fontWeight: 700, fontSize: 18 }}>{acc.name}</div>
+                  <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+                    {pending ? "正在进入..." : acc.username}
+                  </div>
+                </button>
+              );
+            })}
 
-          <Button
-            type="primary"
-            size="large"
-            block
-            loading={loading}
-            onClick={handleLogin}
-            icon={<UserOutlined />}
-            style={{
-              height: 48,
-              borderRadius: 10,
-              fontWeight: 600,
-              fontSize: 16,
-            }}
-          >
-            登 录
-          </Button>
-        </Space>
+            <Link href="/register" style={{ flex: "1 1 140px" }}>
+              <div
+                style={{
+                  height: "100%",
+                  padding: "20px 12px",
+                  borderRadius: 14,
+                  border: "2px dashed var(--accent-strong)",
+                  background: "var(--accent-soft)",
+                  cursor: "pointer",
+                  textAlign: "center",
+                  transition: "all 0.2s",
+                  color: "var(--text-main)",
+                }}
+              >
+                <div style={{ fontSize: 40, marginBottom: 8 }}><PlusOutlined /></div>
+                <div style={{ fontWeight: 700, fontSize: 18 }}>注册</div>
+                <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>创建新角色</div>
+              </div>
+            </Link>
+          </div>
+        ) : (
+          <Empty description="暂无可用角色，请先注册" style={{ marginBottom: 12 }} />
+        )}
 
-        <div style={{ textAlign: "center", marginTop: 20, color: "#8c8c8c", fontSize: 13 }}>
-          由全球最先进的 AI 大模型驱动
+        <div style={{ textAlign: "center", marginTop: 20, color: "var(--text-secondary)", fontSize: 13 }}>
+          无需密码，选择角色即可进入
         </div>
       </Card>
     </div>

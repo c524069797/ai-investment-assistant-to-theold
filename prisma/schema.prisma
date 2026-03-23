@@ -48,8 +48,6 @@ model Watchlist {
   id      String   @id
   userId  String   @map("user_id")
   code    String
-  name    String
-  market  Int      @default(0)
   type    String
   addedAt DateTime @default(now()) @map("added_at")
 
@@ -57,4 +55,43 @@ model Watchlist {
 
   @@unique([userId, code, type])
   @@map("watchlist")
+}
+
+model BigVAuthor {
+  id        String        @id
+  name      String        @unique
+  slug      String        @unique
+  avatar    String?       @default("🧠")
+  category  String        @default("综合研判")
+  bio       String?
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+  articles  BigVArticle[]
+
+  @@map("bigv_authors")
+}
+
+model BigVArticle {
+  id              String     @id
+  authorId        String     @map("author_id")
+  title           String
+  content         String
+  images          String[]   @default([])
+  sourceUrl       String?    @map("source_url")
+  publishedAt     DateTime   @map("published_at")
+  expiresAt       DateTime   @map("expires_at")
+  summary         String
+  primaryCategory String     @map("primary_category")
+  tags            String[]   @default([])
+  sentiment       String     @default("neutral")
+  score           Int        @default(0)
+  rankScore       Float      @default(0) @map("rank_score")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+  author          BigVAuthor @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([publishedAt(sort: Desc)])
+  @@index([primaryCategory])
+  @@index([authorId, publishedAt(sort: Desc)])
+  @@map("bigv_articles")
 }

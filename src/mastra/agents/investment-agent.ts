@@ -8,6 +8,7 @@ import { bottomFinderTool } from "../tools/bottom-finder";
 import { hotspotAnalyzerTool } from "../tools/hotspot-analyzer";
 import { stockAnalyzerTool } from "../tools/stock-analyzer";
 import { stockNewsTool } from "../tools/stock-news";
+import { bigVAnalysisTool } from "../tools/bigv-analysis";
 
 export const INVESTMENT_AGENT_INSTRUCTIONS = `你是一位专业的 AI 投资助手，专门为中老年投资者服务。你的名字叫"小智"。你同时也是一位**精通技术分析的投资教育专家**，熟练掌握各类技术指标并能用通俗语言解释。
 
@@ -142,12 +143,14 @@ export const INVESTMENT_AGENT_INSTRUCTIONS = `你是一位专业的 AI 投资助
 5. **技术分析教学**：用简单的语言解释布林线、MACD、RSI、KDJ、均线、缠论等技术指标的含义和用法
 6. **抄底分析**：用 bottomFinder 工具分析股票的 RSI、布林带、均线等技术指标，判断是否出现超卖信号
 7. **热点追踪**：用 hotspotAnalyzer 工具追踪当前市场热点，筛选 5-30 元标的
+8. **大V观点追踪**：用 bigVAnalysis 工具查询最近三个月收录的大V文章、老师观点、标签和摘要
 
 ## 策略使用规则
 
 - **最重要**：当用户提到任何个股（通过名称、代码、或问"XX怎么样/如何"），必须立即同时调用 stockAnalyzer 和 stockNews 工具，主动获取全部数据和技术指标，绝不要问用户提供数据
 - 当用户提到"爸爸模式"、"抄底"、"超卖"、"低估值"时，额外使用 bottomFinder 工具做专项分析
 - 当用户提到"妈妈模式"、"热点"、"追涨"、"题材"时，自动使用 hotspotAnalyzer 工具进行分析
+- 当用户提到"老师"、"大V"、"观点"、"某某怎么看"、"某某老师今天怎么分析"时，主动使用 bigVAnalysis 工具查询最近三个月收录内容
 - 当用户问到任何技术指标（如"RSI多少"、"布林线在哪"、"MACD金叉了吗"、"均线排列"），使用 stockAnalyzer 获取真实指标数据来回答
 - 使用 hotspotAnalyzer 时，强调热点轮动风险，提醒严格止盈止损
 
@@ -162,7 +165,7 @@ export const INVESTMENT_AGENT_INSTRUCTIONS = `你是一位专业的 AI 投资助
 
 function normalizeBaseUrl(url?: string) {
   if (!url) return "https://ai.muapi.cn/v1";
-  return url.endsWith("/v1") ? url : `${url.replace(/\/$/, "")}/v1`;
+  return url.replace(/\/$/, "");
 }
 
 export const investmentAgent = new Agent({
@@ -185,5 +188,6 @@ export const investmentAgent = new Agent({
     hotspotAnalyzer: hotspotAnalyzerTool,
     stockAnalyzer: stockAnalyzerTool,
     stockNews: stockNewsTool,
+    bigVAnalysis: bigVAnalysisTool,
   },
 });

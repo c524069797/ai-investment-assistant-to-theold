@@ -15,6 +15,16 @@ const { Title, Text, Paragraph } = Typography;
 export default function LessonDetailPage({ params }: { params: Promise<{ lessonId: string }> }) {
   const { lessonId } = use(params);
   const lesson = getLessonById(lessonId);
+  const charts = useMemo(() => getChartsForLesson(lessonId), [lessonId]);
+
+  const chartMap = useMemo(() => {
+    const map = new Map<string, LessonChartType>();
+    const allCharts = [...charts, ...(lesson?.charts ?? [])];
+    for (const chart of allCharts) {
+      map.set(chart.id, chart);
+    }
+    return map;
+  }, [charts, lesson?.charts]);
 
   if (!lesson) {
     return (
@@ -27,17 +37,6 @@ export default function LessonDetailPage({ params }: { params: Promise<{ lessonI
       </div>
     );
   }
-
-  const charts = useMemo(() => getChartsForLesson(lessonId), [lessonId]);
-
-  const chartMap = useMemo(() => {
-    const map = new Map<string, LessonChartType>();
-    const allCharts = [...charts, ...(lesson.charts ?? [])];
-    for (const chart of allCharts) {
-      map.set(chart.id, chart);
-    }
-    return map;
-  }, [charts, lesson.charts]);
 
   // Enhanced markdown-like rendering with code blocks and chart support
   const renderContent = (content: string) => {

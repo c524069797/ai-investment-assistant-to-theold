@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Typography, Card, Button, Empty, message, Spin, Space, Alert } from "antd";
 import { DeleteOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import Link from "next/link";
@@ -57,11 +59,29 @@ function FundWatchItem({ code, name, onRemove }: { code: string; name: string; o
 }
 
 export default function WatchlistPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { items, isLoading: watchlistLoading, removeItem } = useWatchlist();
   const { currentUser, isLoading: userLoading } = useUser();
 
   const stocks = items.filter((i) => i.type === "stock");
   const funds = items.filter((i) => i.type === "fund");
+
+  useEffect(() => {
+    if (watchlistLoading || userLoading) {
+      return;
+    }
+
+    const action = searchParams.get("action");
+    if (action === "open-first-stock" && stocks.length) {
+      router.replace(`/stocks/${stocks[0].code}?market=${stocks[0].market}`);
+      return;
+    }
+
+    if (action === "open-first-fund" && funds.length) {
+      router.replace(`/funds/${funds[0].code}`);
+    }
+  }, [funds, router, searchParams, stocks, userLoading, watchlistLoading]);
 
   const userName = currentUser?.name ?? "我";
 
@@ -76,7 +96,7 @@ export default function WatchlistPage() {
     );
   }
 
-  if (items.length === 0) {
+  if (!items.length) {
     return (
       <div className="page-container">
         <Title level={3}>{currentUser?.avatar ?? "⭐"} {userName}的自选</Title>
@@ -88,7 +108,7 @@ export default function WatchlistPage() {
               </span>
             }
           >
-            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+            <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
               <Link href="/stocks">
                 <Button type="primary" icon={<PlusOutlined />} size="large">
                   添加股票
@@ -108,7 +128,7 @@ export default function WatchlistPage() {
 
   return (
     <div className="page-container">
-      <Space direction="vertical" size={4} style={{ marginBottom: 16 }}>
+      <Space orientation="vertical" size={4} style={{ marginBottom: 16 }}>
         <Title level={3} style={{ marginBottom: 0 }}>{currentUser?.avatar ?? "⭐"} {userName}的自选</Title>
         <Paragraph style={{ marginBottom: 0, color: "#666" }}>
           这里优先展示自选股的 AI 综合分析：相关新闻、量能变化、主力行为研判、压力位 / 支撑位 / 突破位，以及是否上榜龙虎榜。
