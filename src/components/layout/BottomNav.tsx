@@ -22,6 +22,7 @@ const NAV_ITEMS = [
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const hideOnAuthPage = pathname === "/login" || pathname === "/register";
 
   const getActiveKey = () => {
     if (pathname === "/") return "/";
@@ -30,6 +31,10 @@ export default function BottomNav() {
   };
 
   const activeKey = getActiveKey();
+
+  if (hideOnAuthPage) {
+    return null;
+  }
 
   return (
     <nav className="bottom-nav">

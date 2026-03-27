@@ -10,6 +10,7 @@ import { useUser } from "@/lib/hooks/useUser";
 import useSWR from "swr";
 import type { FundEstimate } from "@/types/fund";
 import WatchlistInsightCard from "@/components/stock/WatchlistInsightCard";
+import StockMemoryCard from "@/components/memory/StockMemoryCard";
 import { formatPercent, getPriceColor } from "@/styles/stock-colors";
 
 const { Title, Text, Paragraph } = Typography;
@@ -133,6 +134,12 @@ export default function WatchlistPage() {
         <Paragraph style={{ marginBottom: 0, color: "#666" }}>
           这里优先展示自选股的 AI 综合分析：相关新闻、量能变化、主力行为研判、压力位 / 支撑位 / 突破位，以及是否上榜龙虎榜。
         </Paragraph>
+        <Space wrap>
+          <Link href="/memory">
+            <Button type="default">进入 MemBrain 记忆中心</Button>
+          </Link>
+          <Text type="secondary">先补投资画像和关注逻辑，后续聊天会更连续。</Text>
+        </Space>
       </Space>
 
       {stocks.length > 0 && (
@@ -152,6 +159,7 @@ export default function WatchlistPage() {
             {stocks.map((item) => (
               <div key={item.code} style={{ display: "grid", gap: 8 }}>
                 <WatchlistInsightCard code={item.code} name={item.name} market={item.market} />
+                <StockMemoryCard code={item.code} name={item.name} market={item.market} compact />
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
                   <Button
                     danger

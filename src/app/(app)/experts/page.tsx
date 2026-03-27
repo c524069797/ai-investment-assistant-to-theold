@@ -157,10 +157,22 @@ export default function ExpertsPage() {
       <Card className="dashboard-hero experts-hero" style={{ marginBottom: 16 }}>
         <Text className="hero-eyebrow">观点合集</Text>
         <Title level={2} className="hero-title">大V观点合集</Title>
+        <Paragraph className="hero-subtitle" style={{ maxWidth: 720, marginBottom: 0 }}>
+          把最近导入的老师观点按作者聚合展示，先看更新频率和情绪，再决定是否交给 AI 做一次更通俗的解读。
+        </Paragraph>
+        <Space wrap style={{ marginTop: 12 }}>
+          <Tag color="red">最近 3 个月</Tag>
+          <Tag color="purple">作者聚合阅读</Tag>
+          <Tag color="blue">一键交给 AI 解读</Tag>
+        </Space>
       </Card>
 
       <Card className="tech-section-card" style={{ marginBottom: 16 }}>
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
+          <Space wrap style={{ justifyContent: "space-between", width: "100%" }}>
+            <Text strong>老师筛选</Text>
+            <Text type="secondary">当前文章 {data?.articles.length ?? 0} 篇 / 作者 {collections.length} 位</Text>
+          </Space>
           <Input.Search
             key={`${author}-${category}-${tag}-${keyword}`}
             allowClear
@@ -225,7 +237,7 @@ export default function ExpertsPage() {
                 extra={
                   <div className="experts-collection-card__header-extra">
                     <Link href={`/chat?title=${encodeURIComponent(`${collection.author.name}观点合集`)}&prompt=${encodeURIComponent(buildCollectionPrompt(collection))}`}>
-                      <Button type="link">交给 AI 解读</Button>
+                      <Button type="link">AI 总结本周观点</Button>
                     </Link>
                   </div>
                 }
@@ -264,7 +276,7 @@ export default function ExpertsPage() {
 
                         <div className="experts-collection-item__actions">
                           <Link href={`/chat?title=${encodeURIComponent(`${collection.author.name}观点解读`)}&prompt=${encodeURIComponent(`请用通俗方式解读 ${collection.author.name} 在《${article.title}》里的核心判断，并告诉我相对上一条观点有何变化。`)}`}>
-                            <Button type="link">交给 AI 解读</Button>
+                            <Button type="link">AI 解读这一篇</Button>
                           </Link>
                           {article.sourceUrl ? (
                             <a href={article.sourceUrl} target="_blank" rel="noreferrer">

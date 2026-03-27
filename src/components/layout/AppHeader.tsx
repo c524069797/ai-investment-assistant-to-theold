@@ -39,6 +39,7 @@ export default function AppHeader() {
   const { mode, toggleMode } = useThemeMode();
   const { currentUser, isLoading } = useUser();
   const isDark = mode === "tech-dark";
+  const hideOnAuthPage = pathname === "/login" || pathname === "/register";
 
   const activeKey = useMemo(() => {
     if (pathname === "/") {
@@ -47,6 +48,10 @@ export default function AppHeader() {
 
     return NAV_ITEMS.find((item) => item.href !== "/" && pathname.startsWith(item.href))?.href ?? "/";
   }, [pathname]);
+
+  if (hideOnAuthPage) {
+    return null;
+  }
 
   return (
     <Header className="app-header">
@@ -61,7 +66,7 @@ export default function AppHeader() {
                 <Title level={5} className="app-header-brand-title">
                   智能投资助手
                 </Title>
-                <span className="app-header-brand-subtitle">A股版 · investment dashboard</span>
+                <span className="app-header-brand-subtitle">适老化投研界面 · 双端可读</span>
               </div>
             </Link>
 

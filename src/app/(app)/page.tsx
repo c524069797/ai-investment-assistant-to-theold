@@ -1,11 +1,17 @@
 "use client";
 
 import {
+  ApiOutlined,
   AudioOutlined,
+  BuildOutlined,
+  GlobalOutlined,
   MehOutlined,
+  MedicineBoxOutlined,
+  RobotOutlined,
   SolutionOutlined,
   StarFilled,
   StockOutlined,
+  ThunderboltOutlined,
 } from "@ant-design/icons";
 import { Button, Card, Empty, Skeleton, Typography } from "antd";
 import Link from "next/link";
@@ -71,12 +77,12 @@ interface AggressiveScanResult {
 }
 
 const HOTSPOT_TOPICS = [
-  { keyword: "人工智能", icon: "🤖", heat: 95 },
-  { keyword: "新能源", icon: "⚡", heat: 88 },
-  { keyword: "半导体", icon: "💎", heat: 85 },
-  { keyword: "机器人", icon: "🦾", heat: 82 },
-  { keyword: "数字经济", icon: "🌐", heat: 78 },
-  { keyword: "医药", icon: "💊", heat: 72 },
+  { keyword: "人工智能", icon: <RobotOutlined />, heat: 95 },
+  { keyword: "新能源", icon: <ThunderboltOutlined />, heat: 88 },
+  { keyword: "半导体", icon: <ApiOutlined />, heat: 85 },
+  { keyword: "机器人", icon: <BuildOutlined />, heat: 82 },
+  { keyword: "数字经济", icon: <GlobalOutlined />, heat: 78 },
+  { keyword: "医药", icon: <MedicineBoxOutlined />, heat: 72 },
 ];
 
 function clamp(value: number, min: number, max: number) {
@@ -296,13 +302,13 @@ function DashboardHero({
       <div className="modern-dashboard-stage__backdrop" />
       <div className="modern-dashboard-stage__grid">
         <div className="modern-dashboard-stage__main">
-          <div className="modern-dashboard-stage__eyebrow">AI investment copilot</div>
-          <h1 className="modern-dashboard-stage__title">投资驾驶舱</h1>
+          <div className="modern-dashboard-stage__eyebrow">适老化 · AI 投研助手</div>
+          <h1 className="modern-dashboard-stage__title">今天先看什么？</h1>
           <div className="modern-dashboard-stage__summary">{summary}</div>
           <Text className="modern-dashboard-stage__advice">{sentiment.advice}</Text>
           <div className="modern-dashboard-stage__actions">
             <Link href="/chat">
-              <Button type="primary" icon={<AudioOutlined />}>打开 AI 助手</Button>
+              <Button type="primary" icon={<AudioOutlined />}>打开 AI 分析</Button>
             </Link>
             <Link href="/strategy">
               <Button icon={<SolutionOutlined />}>查看今日策略</Button>

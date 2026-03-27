@@ -37,12 +37,12 @@ const { Text, Title } = Typography;
 const { useBreakpoint } = Grid;
 
 const QUICK_QUESTIONS = [
-  "请用通俗方式分析今天A股大盘情绪、强弱方向和重点风险。",
-  "帮我看看今天科技、消费、红利谁更强。",
-  "但斌老师今天怎么分析？",
-  "林园老师今天怎么看白酒？",
-  "大V今天整体偏多还是偏谨慎？",
-  "帮我做个风险评估。",
+  "今天大盘情绪怎么样？我应该先看风险还是机会？",
+  "科技、消费、红利，今天谁更强？",
+  "结合我的自选股，帮我排一下优先观察顺序。",
+  "今天大V整体偏多还是偏谨慎？",
+  "帮我把今天策略说得再通俗一点。",
+  "如果我是保守型投资者，今天该注意什么？",
 ];
 
 interface ChatSessionSummary {
@@ -86,6 +86,7 @@ function buildStockSessionTitle(code: string, name?: string) {
 
 function SessionList({
   filteredSessions,
+  sessionMeta,
   selectedSessionId,
   searchKeyword,
   setSearchKeyword,
@@ -101,9 +102,9 @@ function SessionList({
   onCreateSession,
   creatingSession,
   onSelectSession,
-  isMobile,
 }: {
   filteredSessions: ChatSessionSummary[];
+  sessionMeta: string;
   selectedSessionId: string;
   searchKeyword: string;
   setSearchKeyword: (value: string) => void;
@@ -119,14 +120,16 @@ function SessionList({
   onCreateSession: () => void;
   creatingSession: boolean;
   onSelectSession?: () => void;
-  isMobile: boolean;
 }) {
   return (
     <div className="chat-history-panel">
       <Button className="chat-history-panel__new" type="primary" icon={<PlusOutlined />} onClick={onCreateSession} loading={creatingSession}>
-        {isMobile ? "新建对话" : "New Chat"}
+        新建对话
       </Button>
-      <div className="chat-history-panel__title">{isMobile ? "历史对话" : "Chat History"}</div>
+      <div className="chat-history-panel__title-wrap">
+        <div className="chat-history-panel__title">对话记录</div>
+        <div className="chat-history-panel__meta">{sessionMeta}</div>
+      </div>
       <Input
         allowClear
         prefix={<SearchOutlined />}
@@ -288,7 +291,11 @@ function ConversationPanel({
               历史
             </Button>
           ) : null}
-          <Title level={2} className="chat-reference-shell__title">AI Investment Assistant</Title>
+          <div className="chat-reference-shell__title-group">
+            <Text className="chat-reference-shell__eyebrow">AI 问答陪伴</Text>
+            <Title level={2} className="chat-reference-shell__title">AI 投资助手</Title>
+            <Text className="chat-reference-shell__subtitle">围绕大盘、板块、自选股和大V观点，给你更通俗的分析结论。</Text>
+          </div>
         </div>
         <div className="chat-reference-shell__font-tools">
           <Button className="chat-font-btn" onClick={decrease}>A-</Button>
@@ -306,9 +313,9 @@ function ConversationPanel({
               <div className="chat-empty-state__icon">
                 <RobotOutlined />
               </div>
-              <Title level={3}>你好，我是你的投资助手</Title>
+              <Title level={3}>今晚先看什么？我来帮你理顺</Title>
               <Text className="chat-empty-state__desc">
-                你可以直接问大盘、板块、个股、自选和大V观点，我会把对话自动存进左侧历史列表。
+                你可以直接问大盘情绪、板块强弱、个股位置、自选股优先级和大V观点，我会把每次分析自动整理进历史对话。
               </Text>
               <div className="chat-quick-grid chat-quick-grid--stack">
                 {QUICK_QUESTIONS.map((question) => (
@@ -337,17 +344,17 @@ function ConversationPanel({
           {isLoading && (
             <div className="tech-chat-loading chat-reference-shell__loading">
               <Spin size="small" />
-              <Text style={{ color: "var(--text-secondary)" }}>小智正在整理最新分析...</Text>
+              <Text style={{ color: "var(--text-secondary)" }}>正在整理盘面、新闻和历史观点，请稍候...</Text>
             </div>
           )}
         </div>
       </div>
 
       <div className="tech-chat-shell__composer chat-reference-shell__composer">
-        <button type="button" className="chat-composer-side-btn" title="语音功能稍后接入">
+        <button type="button" className="chat-composer-side-btn" title="语音整理能力稍后接入" aria-label="语音功能暂未开放">
           <AudioOutlined />
         </button>
-        <button type="button" className="chat-composer-side-btn" title="图片上传功能稍后接入">
+        <button type="button" className="chat-composer-side-btn" title="图片识别能力稍后接入" aria-label="图片功能暂未开放">
           <PictureOutlined />
         </button>
         <form className="chat-composer-form" onSubmit={handleSubmit}>
@@ -355,7 +362,7 @@ function ConversationPanel({
             size="large"
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            placeholder="输入您的问题或上传股票截图..."
+            placeholder="输入问题、股票代码，或者想看的老师观点..."
             className="chat-composer-input"
             style={{ fontSize }}
             onPressEnter={(event) => {
@@ -366,7 +373,7 @@ function ConversationPanel({
             }}
           />
           <Button type="primary" size="large" htmlType="submit" icon={<SendOutlined />} loading={isLoading} className="chat-send-btn">
-            Send
+            发送
           </Button>
         </form>
       </div>
@@ -557,6 +564,16 @@ export default function ChatWindow() {
     return sessions.filter((item) => item.title.toLowerCase().includes(keyword) || item.preview.toLowerCase().includes(keyword));
   }, [sessions, searchKeyword]);
 
+  const sessionMeta = useMemo(() => {
+    if (!sessions.length) {
+      return "你的新对话会自动保存在这里";
+    }
+    if (searchKeyword.trim()) {
+      return `共 ${sessions.length} 条，当前匹配 ${filteredSessions.length} 条`;
+    }
+    return `最近共 ${sessions.length} 条会话`;
+  }, [sessions.length, filteredSessions.length, searchKeyword]);
+
   const selectedSession = sessions.find((item) => item.id === selectedSessionId);
 
   if (userLoading) {
@@ -566,6 +583,7 @@ export default function ChatWindow() {
   const historyContent = (
     <SessionList
       filteredSessions={filteredSessions}
+      sessionMeta={sessionMeta}
       selectedSessionId={selectedSessionId}
       searchKeyword={searchKeyword}
       setSearchKeyword={setSearchKeyword}
@@ -581,7 +599,6 @@ export default function ChatWindow() {
       onCreateSession={() => createSession().then(() => setHistoryOpen(false))}
       creatingSession={creatingSession}
       onSelectSession={() => setHistoryOpen(false)}
-      isMobile={isMobile}
     />
   );
 

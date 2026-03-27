@@ -7,14 +7,17 @@ datasource db {
 }
 
 model User {
-  id           String        @id
-  username     String        @unique
-  passwordHash String        @map("password_hash")
-  name         String
-  avatar       String        @default("👤")
-  createdAt    DateTime      @default(now()) @map("created_at")
-  watchlist    Watchlist[]
-  chatSessions ChatSession[]
+  id                 String                  @id
+  username           String                  @unique
+  passwordHash       String                  @map("password_hash")
+  name               String
+  avatar             String                  @default("👤")
+  createdAt          DateTime                @default(now()) @map("created_at")
+  watchlist          Watchlist[]
+  chatSessions       ChatSession[]
+  investmentProfile  UserInvestmentProfile?
+  watchlistTheses    WatchlistThesis[]
+  analysisSnapshots  AnalysisSnapshot[]
 
   @@map("users")
 }
@@ -55,6 +58,69 @@ model Watchlist {
 
   @@unique([userId, code, type])
   @@map("watchlist")
+}
+
+model UserInvestmentProfile {
+  id                      String   @id
+  userId                  String   @unique @map("user_id")
+  riskPreference          String   @default("balanced") @map("risk_preference")
+  investmentStyle         String[] @default([]) @map("investment_style")
+  holdingPeriodPreference String?  @map("holding_period_preference")
+  preferredEvidence       String[] @default([]) @map("preferred_evidence")
+  dislikedPatterns        String[] @default([]) @map("disliked_patterns")
+  summary                 String?
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_investment_profiles")
+}
+
+model WatchlistThesis {
+  id                     String   @id
+  userId                 String   @map("user_id")
+  code                   String
+  market                 Int      @default(1)
+  type                   String   @default("stock")
+  name                   String?
+  watchReason            String   @default("") @map("watch_reason")
+  bullPoints             String[] @default([]) @map("bull_points")
+  bearPoints             String[] @default([]) @map("bear_points")
+  watchSignals           String[] @default([]) @map("watch_signals")
+  invalidationConditions String[] @default([]) @map("invalidation_conditions")
+  lastJudgement          String?  @map("last_judgement")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, code, type])
+  @@index([userId, updatedAt(sort: Desc)])
+  @@map("watchlist_theses")
+}
+
+model AnalysisSnapshot {
+  id          String   @id
+  userId      String   @map("user_id")
+  code        String?
+  market      Int?
+  type        String   @default("stock")
+  title       String
+  summary     String
+  bullPoints  String[] @default([]) @map("bull_points")
+  bearPoints  String[] @default([]) @map("bear_points")
+  keyChange   String?  @map("key_change")
+  confidence  Float?
+  sourceType  String   @default("manual") @map("source_type")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, code, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("analysis_snapshots")
 }
 
 model BigVAuthor {

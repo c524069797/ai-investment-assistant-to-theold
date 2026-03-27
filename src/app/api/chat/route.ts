@@ -2,10 +2,11 @@ export const dynamic = "force-dynamic";
 
 import { investmentAgent } from "@/mastra/agents/investment-agent";
 import { NextRequest, NextResponse } from "next/server";
-import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { addChatMessage, ensureChatSession, updateChatSessionTitle } from "@/lib/db";
 import { sanitizeAssistantText } from "@/lib/chat/sanitize";
 import { fetchMarketIndices } from "@/lib/api/eastmoney";
+import { getSessionUserId } from "@/lib/auth/session";
+import { getChatMemoryContext, saveChatAnalysisSnapshot } from "@/lib/memory/service";
 
 interface UIMessagePart {
   type: string;
@@ -75,7 +76,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string) {
 
 function normalizeBaseUrl(url?: string) {
   if (!url) {
-    return "https://ai.muapi.cn/v1";
+    return "https://ice.v.ua/v1";
   }
   return url.replace(/\/$/, "");
 }
@@ -109,7 +110,7 @@ const FALLBACK_CHAT_SYSTEM_PROMPT = "你是一位专业、耐心、通俗易懂�
 async function requestOpenAICompatibleFallback(messages: ReturnType<typeof convertMessages>) {
   const apiKey = process.env.OPENAI_API_KEY;
   const baseUrl = normalizeBaseUrl(process.env.OPENAI_BASE_URL);
-  const model = process.env.OPENAI_MODEL || "gpt-5.2";
+  const model = process.env.OPENAI_MODEL || "gpt-5.4";
 
   if (!apiKey) {
     throw new Error("fallback missing api key");
@@ -144,9 +145,8 @@ async function requestOpenAICompatibleFallback(messages: ReturnType<typeof conve
 
 export async function POST(request: NextRequest) {
   try {
-    const token = request.cookies.get(SESSION_COOKIE)?.value;
-    const session = token ? verifySessionToken(token) : null;
-    if (!session) {
+    const userId = getSessionUserId(request);
+    if (!userId) {
       return NextResponse.json({ error: "未登录" }, { status: 401 });
     }
 
@@ -160,12 +160,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "sessionId is required" }, { status: 400 });
     }
 
-    const chatSession = await ensureChatSession(session.userId, sessionId);
+    const chatSession = await ensureChatSession(userId, sessionId);
 
     const coreMessages = convertMessages(messages);
     const latestUserMessage = [...messages].reverse().find((msg) => msg.role === "user");
     const userContent = latestUserMessage ? extractContent(latestUserMessage) : "";
     let effectiveMessages = coreMessages;
+    let matchedThesis: { code: string; market?: number | null; type?: string; name?: string | null } | null = null;
 
     if (userContent) {
       await addChatMessage(sessionId, "user", userContent);
@@ -174,15 +175,43 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const systemContexts: string[] = [];
+
+    if (userContent) {
+      try {
+        const memoryContext = await getChatMemoryContext(userId, { query: userContent });
+        if (memoryContext.context.trim()) {
+          systemContexts.push(memoryContext.context);
+        }
+        matchedThesis = memoryContext.matchedThesis
+          ? {
+              code: memoryContext.matchedThesis.code,
+              market: memoryContext.matchedThesis.market,
+              type: memoryContext.matchedThesis.type,
+              name: memoryContext.matchedThesis.name,
+            }
+          : null;
+      } catch (error) {
+        console.error("[/api/chat] getChatMemoryContext failed", error);
+      }
+    }
+
     if (userContent && shouldInjectMarketOverview(userContent)) {
       try {
         const marketContext = await buildMarketOverviewContext();
         if (marketContext) {
-          effectiveMessages = [{ role: "system", content: marketContext }, ...coreMessages];
+          systemContexts.push(marketContext);
         }
       } catch (error) {
         console.error("[/api/chat] buildMarketOverviewContext failed", error);
       }
+    }
+
+    if (systemContexts.length) {
+      effectiveMessages = [
+        ...systemContexts.map((content) => ({ role: "system" as const, content })),
+        ...coreMessages,
+      ];
     }
 
     let assistantContent = "";
@@ -216,6 +245,19 @@ export async function POST(request: NextRequest) {
     }
 
     await addChatMessage(sessionId, "assistant", assistantContent);
+
+    if (userContent && assistantContent) {
+      try {
+        await saveChatAnalysisSnapshot({
+          userId,
+          userContent,
+          assistantContent,
+          matchedThesis,
+        });
+      } catch (error) {
+        console.error("[/api/chat] saveChatAnalysisSnapshot failed", error);
+      }
+    }
 
     return new Response(assistantContent, {
       headers: {

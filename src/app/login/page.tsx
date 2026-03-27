@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Button, Card, Empty, Spin, Typography, message } from "antd";
-import { PlusOutlined, StockOutlined } from "@ant-design/icons";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Button, Card, Empty, Spin, Tag, Typography, message } from "antd";
+import { ArrowRightOutlined, PlusOutlined, StockOutlined } from "@ant-design/icons";
 import Link from "next/link";
 
-const { Title, Text } = Typography;
+const { Title, Text, Paragraph } = Typography;
 
 interface AccountOption {
   username: string;
@@ -18,6 +18,8 @@ const DEFAULT_ACCOUNTS: AccountOption[] = [
   { username: "mama", name: "妈妈", avatar: "👩" },
 ];
 
+const LOGIN_HIGHLIGHTS = ["适老化界面", "自选股跟踪", "AI 问答陪伴"];
+
 export default function LoginPage() {
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [selected, setSelected] = useState("");
@@ -25,6 +27,14 @@ export default function LoginPage() {
   const [redirecting, setRedirecting] = useState(false);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [accountsError, setAccountsError] = useState("");
+
+  const accountCountLabel = useMemo(() => {
+    if (!accounts.length) {
+      return "先创建一个家庭角色，再开始使用";
+    }
+
+    return `当前可直接进入 ${accounts.length} 个角色`;
+  }, [accounts.length]);
 
   const loadAccounts = useCallback(async () => {
     setLoadingAccounts(true);
@@ -86,62 +96,48 @@ export default function LoginPage() {
   };
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "var(--page-bg)",
-        padding: 16,
-      }}
-    >
+    <div className="auth-shell">
+      <div className="auth-shell__backdrop" />
       {redirecting && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "var(--overlay-bg)",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 999,
-            flexDirection: "column",
-            gap: 12,
-          }}
-        >
+        <div className="auth-redirect-mask">
           <Spin size="large" />
-          <Text style={{ fontSize: 16, color: "var(--text-main)" }}>正在进入首页...</Text>
+          <Text className="auth-redirect-mask__text">正在进入首页，请稍候...</Text>
         </div>
       )}
-      <Card
-        style={{
-          width: "100%",
-          maxWidth: 520,
-          borderRadius: 24,
-          boxShadow: "var(--panel-shadow)",
-          border: "1px solid var(--panel-border)",
-          background: "var(--panel-bg)",
-        }}
-      >
-        <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <StockOutlined style={{ fontSize: 48, color: "#2b56c2", marginBottom: 12 }} />
-          <Title level={3} style={{ margin: 0, color: "var(--text-main)" }}>AI 智能投资助手</Title>
-          <Text type="secondary">请选择角色登录，或先注册一个新身份</Text>
+      <Card className="auth-card auth-card--login">
+        <div className="auth-card__header">
+          <div className="auth-card__logo">
+            <StockOutlined />
+          </div>
+          <Text className="auth-card__eyebrow">家庭投研入口</Text>
+          <Title level={2} className="auth-card__title">AI 智能投资助手</Title>
+          <Paragraph className="auth-card__desc">
+            选择角色即可继续使用首页、AI 问答、自选股分析和大V观点，不需要额外输入密码。
+          </Paragraph>
+          <div className="auth-card__tag-row">
+            {LOGIN_HIGHLIGHTS.map((item) => (
+              <Tag key={item} className="auth-card__tag">{item}</Tag>
+            ))}
+          </div>
+        </div>
+
+        <div className="auth-card__section-head">
+          <Text className="auth-card__section-title">选择身份</Text>
+          <Text className="auth-card__section-meta">{accountCountLabel}</Text>
         </div>
 
         {loadingAccounts ? (
-          <div style={{ textAlign: "center", padding: "24px 0" }}>
+          <div className="auth-loading-state">
             <Spin />
+            <Text className="auth-loading-state__text">正在准备可用角色...</Text>
           </div>
         ) : accountsError ? (
-          <div style={{ textAlign: "center", padding: "12px 0 4px" }}>
+          <div className="auth-empty-state">
             <Empty description={accountsError} style={{ marginBottom: 12 }} />
             <Button onClick={loadAccounts}>重新加载</Button>
           </div>
         ) : accounts.length ? (
-          <div style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+          <div className="auth-account-grid">
             {accounts.map((acc) => {
               const active = selected === acc.username;
               const pending = loadingUser === acc.username;
@@ -152,59 +148,44 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => handleLogin(acc.username)}
                   disabled={!!loadingUser}
-                  style={{
-                    flex: "1 1 140px",
-                    padding: "20px 12px",
-                    borderRadius: 14,
-                    border: active
-                      ? "2px solid var(--accent-strong)"
-                      : "2px solid var(--panel-border)",
-                    background: active
-                      ? "var(--accent-surface)"
-                      : "var(--card-muted)",
-                    cursor: loadingUser ? "not-allowed" : "pointer",
-                    textAlign: "center",
-                    transition: "all 0.2s",
-                    appearance: "none",
-                    WebkitAppearance: "none",
-                    color: "var(--text-main)",
-                  }}
+                  className={`auth-account-option${active ? " auth-account-option--active" : ""}${pending ? " auth-account-option--pending" : ""}`}
                 >
-                  <div style={{ fontSize: 40, marginBottom: 8 }}>{pending ? "⏳" : acc.avatar}</div>
-                  <div style={{ fontWeight: 700, fontSize: 18 }}>{acc.name}</div>
-                  <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-                    {pending ? "正在进入..." : acc.username}
+                  <div className="auth-account-option__avatar">{pending ? "⏳" : acc.avatar}</div>
+                  <div className="auth-account-option__name">{acc.name}</div>
+                  <div className="auth-account-option__username">{pending ? "正在进入..." : acc.username}</div>
+                  <div className="auth-account-option__action">
+                    <span>进入这个角色</span>
+                    <ArrowRightOutlined />
                   </div>
                 </button>
               );
             })}
 
-            <Link href="/register" style={{ flex: "1 1 140px" }}>
-              <div
-                style={{
-                  height: "100%",
-                  padding: "20px 12px",
-                  borderRadius: 14,
-                  border: "2px dashed var(--accent-strong)",
-                  background: "var(--accent-soft)",
-                  cursor: "pointer",
-                  textAlign: "center",
-                  transition: "all 0.2s",
-                  color: "var(--text-main)",
-                }}
-              >
-                <div style={{ fontSize: 40, marginBottom: 8 }}><PlusOutlined /></div>
-                <div style={{ fontWeight: 700, fontSize: 18 }}>注册</div>
-                <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>创建新角色</div>
+            <Link href="/register" className="auth-account-link">
+              <div className="auth-account-option auth-account-option--create">
+                <div className="auth-account-option__avatar auth-account-option__avatar--create">
+                  <PlusOutlined />
+                </div>
+                <div className="auth-account-option__name">注册新角色</div>
+                <div className="auth-account-option__username">给家人或自己创建专属身份</div>
+                <div className="auth-account-option__action">
+                  <span>去注册</span>
+                  <ArrowRightOutlined />
+                </div>
               </div>
             </Link>
           </div>
         ) : (
-          <Empty description="暂无可用角色，请先注册" style={{ marginBottom: 12 }} />
+          <div className="auth-empty-state">
+            <Empty description="暂无可用角色，请先注册" style={{ marginBottom: 12 }} />
+            <Link href="/register">
+              <Button type="primary">去注册</Button>
+            </Link>
+          </div>
         )}
 
-        <div style={{ textAlign: "center", marginTop: 20, color: "var(--text-secondary)", fontSize: 13 }}>
-          无需密码，选择角色即可进入
+        <div className="auth-card__footer">
+          <Text className="auth-card__footer-text">支持多角色切换，便于区分爸爸、妈妈或测试账号的自选与对话记录。</Text>
         </div>
       </Card>
     </div>

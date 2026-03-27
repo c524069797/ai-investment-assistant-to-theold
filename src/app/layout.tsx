@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
+import { IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
 import AntdProvider from "@/components/layout/AntdProvider";
-import AppHeader from "@/components/layout/AppHeader";
-import BottomNav from "@/components/layout/BottomNav";
-import ChunkErrorHandler from "@/components/layout/ChunkErrorHandler";
-import NavigationAgent from "@/components/layout/NavigationAgent";
+
+const ibmPlexSans = IBM_Plex_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+  variable: "--font-family",
+});
 
 export const metadata: Metadata = {
   title: "A股智能投资助手",
@@ -18,14 +22,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body>
-        <AntdProvider>
-          <ChunkErrorHandler />
-          <AppHeader />
-          <main className="main-content">{children}</main>
-          <NavigationAgent />
-          <BottomNav />
-        </AntdProvider>
+      <body className={ibmPlexSans.className}>
+        <AntdProvider>{children}</AntdProvider>
       </body>
     </html>
   );
