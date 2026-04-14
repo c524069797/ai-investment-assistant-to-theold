@@ -38,7 +38,7 @@ export default defineConfig({
       }
     ],
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/c524069797/ai-investment-assistant-site' }
+      { icon: 'github', link: 'https://github.com/c524069797/ai-investment-assistant-to-theold' }
     ],
     footer: {
       message: '由 VitePress 驱动',
