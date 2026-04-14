@@ -107,6 +107,24 @@ body::before {
   z-index: -1;
 }
 
+/* Comment board */
+.comment-wrap {
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+  box-shadow: var(--panel-shadow);
+}
+
+.waline {
+  --waline-theme-color: var(--accent-strong);
+  --waline-text-color: var(--text-main);
+  --waline-bgcolor: transparent;
+  --waline-border: 1px solid var(--border);
+  --waline-border-color: var(--panel-border);
+  --waline-color: var(--accent);
+}
+
 .main-content {
   padding-bottom: 92px;
   min-height: calc(100vh - 64px);
