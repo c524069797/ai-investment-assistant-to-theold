@@ -116,6 +116,32 @@ body::before {
   box-shadow: var(--panel-shadow);
 }
 
+.comment-templates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.template-chip {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--card-muted);
+  color: var(--text-main);
+  padding: 6px 12px;
+  border-radius: 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.template-chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(83, 179, 255, 0.32);
+  box-shadow: var(--accent-glow);
+}
+
 .waline {
   --waline-theme-color: var(--accent-strong);
   --waline-text-color: var(--text-main);
@@ -123,6 +149,32 @@ body::before {
   --waline-border: 1px solid var(--border);
   --waline-border-color: var(--panel-border);
   --waline-color: var(--accent);
+}
+
+/* Reaction layout tidy */
+.waline .wl-reaction ul,
+.waline .waline-reaction ul {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding-left: 0; /* remove bullets */
+}
+
+.waline .wl-reaction li,
+.waline .waline-reaction li {
+  list-style: none;
+}
+
+.waline .wl-reaction button,
+.waline .waline-reaction button {
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 12px;
+  padding: 6px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .main-content {
