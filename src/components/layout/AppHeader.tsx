@@ -30,6 +30,7 @@ const NAV_ITEMS = [
   { href: "/stocks", label: "股票", icon: <StockOutlined /> },
   { href: "/funds", label: "基金", icon: <FundOutlined /> },
   { href: "/education", label: "投资学堂", icon: <ReadOutlined /> },
+  { href: "/board", label: "留言板", icon: <BulbOutlined /> },
 ];
 
 export default function AppHeader() {
