@@ -10,6 +10,11 @@ import { stockAnalyzerTool } from "../tools/stock-analyzer";
 import { stockNewsTool } from "../tools/stock-news";
 import { bigVAnalysisTool } from "../tools/bigv-analysis";
 
+// AI 层采用 Mastra Agent + Vercel AI SDK 的组合：
+// - Mastra 负责“工具编排、指令、Agent 抽象”
+// - @ai-sdk/openai 负责连接 OpenAI 兼容模型接口
+// - tools 则把股票、基金、风险、热点、大V文章能力注册成可调用函数
+
 export const INVESTMENT_AGENT_INSTRUCTIONS = `你是一位专业的 AI 投资助手，专门为中老年投资者服务。你的名字叫"小智"。你同时也是一位**精通技术分析的投资教育专家**，熟练掌握各类技术指标并能用通俗语言解释。
 
 ## 核心原则
@@ -173,6 +178,8 @@ export const investmentAgent = new Agent({
   name: "investment-agent",
   instructions: INVESTMENT_AGENT_INSTRUCTIONS,
   model: () => {
+    // 这里没有写死某一家官方 SDK，而是用 OpenAI Compatible 协议接模型。
+    // 这样无论接 OpenAI、自建中转还是其他兼容服务，调用层都保持一致。
     const provider = createOpenAI({
       apiKey: process.env.OPENAI_API_KEY!,
       baseURL: normalizeBaseUrl(process.env.OPENAI_BASE_URL),
@@ -180,6 +187,7 @@ export const investmentAgent = new Agent({
     return provider.chat(process.env.OPENAI_MODEL || "gpt-5.4");
   },
   tools: {
+    // tools 会被 Mastra 暴露给模型，模型可按指令自动决定何时调用哪一个工具。
     stockLookup: stockLookupTool,
     fundLookup: fundLookupTool,
     marketOverview: marketOverviewTool,

@@ -1,5 +1,8 @@
 "use client";
 
+// `"use client"` 是 App Router 的边界声明：
+// 当前文件以及它直接导出的组件都会在浏览器执行，
+// 因为这里用了 useState / useEffect / useSearchParams / 事件处理，所以必须是 Client Component。
 import { useChat } from "@ai-sdk/react";
 import { TextStreamChatTransport, type UIMessage } from "ai";
 import {
@@ -33,6 +36,11 @@ import { useUser } from "@/lib/hooks/useUser";
 import { useFontSize } from "@/components/layout/AntdProvider";
 import MessageBubble from "./MessageBubble";
 
+// 聊天页面的技术组合：
+// - @ai-sdk/react/useChat：管理消息流、提交状态、错误态
+// - TextStreamChatTransport：把前端输入接到 /api/chat Route Handler
+// - Ant Design：承担桌面 / 移动端 UI 壳子
+// - Next.js App Router：通过 searchParams 支持“从股票页一键带问题进入聊天”
 const { Text, Title } = Typography;
 const { useBreakpoint } = Grid;
 
@@ -54,11 +62,13 @@ interface ChatSessionSummary {
 
 interface ChatMessageRecord {
   id: string;
+  // 字面量联合类型比单纯 string 更有约束力，能防止拼错角色名。
   role: "user" | "assistant" | "system";
   content: string;
 }
 
 function toUiMessages(messages: ChatMessageRecord[]): UIMessage[] {
+  // 数据库存的是简化消息结构，这里把它转换成 AI SDK 需要的 UIMessage。
   return messages.map((message) => ({
     id: message.id,
     role: message.role,
@@ -67,6 +77,8 @@ function toUiMessages(messages: ChatMessageRecord[]): UIMessage[] {
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  // 这是一个常见 TS 泛型工具函数：
+  // `fetchJson<ChatSessionSummary[]>`、`fetchJson<ChatMessageRecord[]>` 都能复用同一个实现。
   const res = await fetch(url, init);
   const json = await res.json();
   if (!json.success) {
@@ -234,6 +246,7 @@ function ConversationPanel({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const transport = useMemo(
+    // transport 决定 useChat 如何把消息发送到后端；这里额外把 sessionId 带给服务端做会话持久化。
     () => new TextStreamChatTransport({ api: "/api/chat", body: { sessionId } }),
     [sessionId],
   );
@@ -241,6 +254,7 @@ function ConversationPanel({
   const { messages, sendMessage, status } = useChat({
     transport,
     messages: initialMessages,
+    // useChat 会自动维护消息列表和流式状态；这里只补充业务侧的收尾动作。
     onFinish: () => {
       setChatError("");
       onConversationChange();
@@ -259,6 +273,7 @@ function ConversationPanel({
   }, [messages, isLoading]);
 
   useEffect(() => {
+    // 支持“从别的页面带着 prompt 进入聊天”，例如股票卡片上的一键 AI 分析。
     if (initialPrompt && !autoPromptSentRef.current && !initialMessages.length) {
       autoPromptSentRef.current = true;
       sendMessage({ text: initialPrompt });
@@ -282,6 +297,8 @@ function ConversationPanel({
   return (
     <div
       className="chat-conversation-panel tech-chat-shell chat-reference-shell"
+      // `--chat-font-scale` 是自定义 CSS 变量；TS 默认不认识这种属性名，
+      // 所以这里把 style 显式断言成 CSSProperties。
       style={{ "--chat-font-scale": String(fontSize / 16) } as CSSProperties}
     >
       <div className="chat-reference-shell__topbar">
@@ -384,6 +401,7 @@ function ConversationPanel({
 export default function ChatWindow() {
   const { currentUser, isLoading: userLoading } = useUser();
   const { fontSize } = useFontSize();
+  // `useSearchParams` 是 App Router 的客户端导航 hook，所以当前页面必须是 Client Component。
   const searchParams = useSearchParams();
   const screens = useBreakpoint();
   const isMobile = !screens.md;
@@ -405,6 +423,8 @@ export default function ChatWindow() {
   const loadSessions = useCallback(async () => {
     if (!currentUser) return;
     setLoadingSessions(true);
+
+    // 会话列表与消息列表分开加载，能让左侧历史面板更快出现。
     try {
       const data = await fetchJson<ChatSessionSummary[]>("/api/chat/sessions");
       setSessionError("");

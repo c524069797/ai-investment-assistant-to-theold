@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useUser } from "./useUser";
 
+// 自选股 hook 走的是“本地状态 + API + 自定义事件”的同步方案：
+// - currentUser 变化时重新拉取
+// - add/remove 后主动派发 watchlist-update 事件
+// - 其他页面无需强耦合，也能同步刷新自己的自选状态
+
 export interface WatchlistItem {
   code: string;
   name: string;

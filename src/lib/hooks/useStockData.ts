@@ -2,13 +2,22 @@ import useSWR from "swr";
 import type { StockQuote, StockSearchResult, StockKLinePoint, MarketIndex } from "@/types/stock";
 import type { KLinePeriod } from "@/types/stock";
 
+// 行情相关的客户端数据层使用 SWR：
+// - key 决定缓存粒度
+// - fetcher 统一处理 success/data 协议
+// - refreshInterval 让页面具备轻量实时刷新能力
+
 interface ApiResponse<T> {
+  // `ApiResponse<T>` 是泛型接口：同一个接口壳子，data 可以是股票、K线、指数等任意类型。
   success: boolean;
   data?: T;
   error?: string;
 }
 
 const fetcher = async <T>(url: string): Promise<T> => {
+  // `fetcher<T>` 也是泛型函数。
+  // 谁调用它，谁来决定 T 是什么，这样一个 fetcher 就能服务所有 SWR hook。
+  // SWR 只关心 Promise；统一 fetcher 后，hooks 可以专注于 key 与刷新策略。
   const res = await fetch(url);
   const json: ApiResponse<T> = await res.json();
   if (!json.success || !json.data) {
@@ -20,6 +29,8 @@ const fetcher = async <T>(url: string): Promise<T> => {
 /** 股票实时行情 */
 export function useStockQuote(market: number, code: string) {
   return useSWR<StockQuote>(
+    // `useSWR<StockQuote>` 显式告诉 TS：这个 hook 成功后拿到的是 StockQuote。
+    // SWR 里 key 为 null 代表“本次不发请求”，这是很常见的条件请求模式。
     code ? `/api/stocks?action=quote&market=${market}&code=${code}` : null,
     fetcher,
     { refreshInterval: 30000 },

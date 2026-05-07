@@ -7,6 +7,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { getAppTheme, type AppThemeMode } from "@/styles/theme";
 import { UserProvider } from "@/lib/hooks/useUser";
 
+// 这个 Provider 是前端技术栈的汇合点：
+// - AntdRegistry：解决 Ant Design 在 Next.js App Router 下的 SSR 样式收集问题
+// - ConfigProvider：统一主题 token、组件尺寸、中文 locale
+// - React Context：管理字号和主题模式
+// - UserProvider：在客户端缓存当前登录用户，避免每个组件重复请求
+
 interface FontSizeContextValue {
   fontSize: number;
   increase: () => void;
@@ -51,6 +57,7 @@ export default function AntdProvider({ children }: { children: React.ReactNode }
   });
 
   useEffect(() => {
+    // 同步到 html[data-theme]，让全局 CSS 和组件主题都能感知当前模式。
     document.documentElement.dataset.theme = mode;
     window.localStorage.setItem(THEME_STORAGE_KEY, mode);
   }, [mode]);
@@ -93,6 +100,10 @@ export default function AntdProvider({ children }: { children: React.ReactNode }
       <FontSizeContext.Provider value={fontSizeValue}>
         <AntdRegistry>
           <ConfigProvider theme={theme} locale={zhCN}>
+            {/*
+              Antd 的 message / modal / notification 依赖 <App /> 作为宿主。
+              UserProvider 放在这里，页面内所有 Client Component 都能直接拿到 currentUser。
+            */}
             <App>
               <UserProvider>{children}</UserProvider>
             </App>

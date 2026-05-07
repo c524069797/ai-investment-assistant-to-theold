@@ -12,6 +12,8 @@ import {
 import type { StockKLinePoint } from "@/types/stock";
 import type { StockRankingItem } from "@/types/stock";
 
+// 这个 Route Handler 用 query.action 做轻量路由分发，
+// 适合“同一资源域下多种读操作”的场景，例如 quote / kline / indices / ranking。
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const action = searchParams.get("action");
@@ -50,6 +52,8 @@ export async function GET(request: NextRequest) {
       case "kline": {
         const market = parseInt(searchParams.get("market") ?? "1", 10);
         const code = searchParams.get("code") ?? "";
+        // 这里把字符串收窄为字面量联合类型，
+        // 这样 fetchStockKLine 只能接收 daily / weekly / monthly 三种合法值。
         const period = (searchParams.get("period") ?? "daily") as "daily" | "weekly" | "monthly";
         const count = parseInt(searchParams.get("count") ?? "120", 10);
         if (!code) {
@@ -65,6 +69,8 @@ export async function GET(request: NextRequest) {
       }
 
       case "index-analysis": {
+        // `[number, string, string][]` 是元组数组：
+        // 每一项都严格约束成 [market, code, name] 三段结构，而不是随意长度的数组。
         const targets: [number, string, string][] = [
           [1, "000001", "上证指数"],
           [1, "000300", "沪深300"],
@@ -208,6 +214,8 @@ export async function GET(request: NextRequest) {
 
         return NextResponse.json({
           success: true,
+          // 这里的 `r is NonNullable<typeof r>` 会把 null 过滤掉，
+          // 过滤后的数组类型会自动从 `(Result | null)[]` 收窄成 `Result[]`。
           data: results.filter((r): r is NonNullable<typeof r> => r !== null),
         });
       }
@@ -254,6 +262,7 @@ export async function GET(request: NextRequest) {
         );
 
         const sorted = results
+          // 类型谓词也可以和业务条件一起写：既去掉 null，也保留有信号强度的结果。
           .filter((r): r is NonNullable<typeof r> => r !== null && r.signalStrength > 0)
           .sort((a, b) => b.signalStrength - a.signalStrength)
           .slice(0, count);
@@ -263,6 +272,8 @@ export async function GET(request: NextRequest) {
 
       case "watchlist-summary": {
         const rawItems = searchParams.get("items") ?? "[]";
+        // `as Array<...>` 属于类型断言：
+        // 告诉 TS“我知道这个 JSON 解析后应该长这样”，适合接口边界层做快速建模。
         const items = JSON.parse(rawItems) as Array<{ market: number; code: string; name?: string }>;
         const limitedItems = items.slice(0, 6);
 
@@ -560,6 +571,9 @@ async function fetchDragonTigerInfo(code: string): Promise<DragonTigerInfo> {
 }
 
 function buildWatchlistInsight(
+  // `Awaited<ReturnType<typeof fetchStockQuote>>` 也是 TS 很值得学的组合：
+  // - ReturnType: 取函数返回值类型
+  // - Awaited: 再把 Promise<...> 展开成真正 resolve 后的类型
   quote: Awaited<ReturnType<typeof fetchStockQuote>>,
   kline: StockKLinePoint[],
   news: WatchlistNewsItem[],

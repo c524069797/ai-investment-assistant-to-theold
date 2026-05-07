@@ -6,6 +6,10 @@ import remarkGfm from "remark-gfm";
 import type { UIMessage } from "ai";
 import { sanitizeAssistantText } from "@/lib/chat/sanitize";
 
+// 这里把 AI SDK 的 UIMessage 渲染成聊天气泡：
+// - 用户消息直接当纯文本展示
+// - 助手消息走 react-markdown + remark-gfm，支持列表、表格、加粗等 Markdown 能力
+
 const { Text } = Typography;
 
 interface MessageBubbleProps {
@@ -14,7 +18,11 @@ interface MessageBubbleProps {
 }
 
 function getMessageText(message: UIMessage): string {
+  // AI SDK 的消息是 parts 数组，未来可扩展图片、工具调用结果等富内容。
   return message.parts
+    // 这里是 TS 的“类型谓词”写法：
+    // `part is Extract<...>` 告诉编译器，filter 之后的 part 一定是文本片段，
+    // 所以后面的 `part.text` 才能获得安全的类型推断，而不是 unknown / never。
     .filter((part): part is Extract<typeof part, { type: "text" }> => part.type === "text")
     .map((part) => part.text)
     .join("");

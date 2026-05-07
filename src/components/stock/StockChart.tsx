@@ -5,6 +5,8 @@ import { Spin } from "antd";
 import type { StockKLinePoint } from "@/types/stock";
 import { STOCK_COLORS } from "@/styles/stock-colors";
 
+// ECharts 依赖浏览器 DOM，不能在 Server Component 中直接渲染。
+// 这里用 next/dynamic + ssr:false 把图表延迟到客户端加载，是 Next.js 集成图表库的常见写法。
 const ReactEChartsCore = dynamic(() => import("echarts-for-react"), {
   ssr: false,
   loading: () => (
@@ -28,6 +30,10 @@ export default function StockChart({ data, name }: StockChartProps) {
   const klineData = data.map((d) => [d.open, d.close, d.low, d.high]);
   const volumes = data.map((d) => d.volume);
 
+  // option 是 ECharts 的核心配置对象：坐标系、序列、tooltip、缩放都在这里声明。
+  // 里面多处 `as const` 也是 TS 常见技巧：
+  // 例如 `type: "axis" as const` 可以避免被推断成普通 string，
+  // 从而满足 ECharts 对字面量枚举值的类型要求。
   const option = {
     tooltip: {
       trigger: "axis" as const,

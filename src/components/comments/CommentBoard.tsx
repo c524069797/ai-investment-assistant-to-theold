@@ -27,7 +27,9 @@ export default function CommentBoard({ serverURL, lang = "zh-CN" }: Props) {
         dark: 'html[data-theme="tech-dark"]',
         requiredMeta: [],
         comment: true,
-        placeholder: "可直接留言，或点击上方模板快速填写…",
+        locale: {
+          placeholder: "可直接留言，或点击上方模板快速填写…",
+        },
       });
     });
 

@@ -8,10 +8,19 @@ import { fetchFundEstimate } from "@/lib/api/tiantianfund";
 import { hashPassword } from "@/lib/auth";
 import { analyzeBigVArticle, type BigVArticleInput } from "@/lib/bigv/analyze";
 
+// 数据访问层使用 Prisma + PostgreSQL：
+// - @prisma/client 提供类型安全的查询 API
+// - @prisma/adapter-pg 直接复用 pg 驱动连接 PostgreSQL
+// - 这里再包一层 lazy singleton，避免 Next.js 开发态热更新时重复创建连接
+
+// `globalThis as unknown as { prisma?: PrismaClient }` 是 TS 里很常见的“扩展全局对象”写法：
+// 先把 globalThis 断言为 unknown，再断言成我们想要的结构，方便挂载自定义字段。
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 let prismaClient = globalForPrisma.prisma ?? null;
 
 function readConnectionStringFromEnvFile() {
+  // Prisma CLI、Next 运行时、本地脚本的启动方式可能不同，
+  // 这里兜底从 .env.local / .env 读取连接串，降低本地开发门槛。
   const envFiles = [".env.local", ".env"];
 
   for (const file of envFiles) {
@@ -58,6 +67,7 @@ function getPrismaClient() {
 
   prismaClient = createPrisma();
 
+  // Next.js 开发模式会频繁热重载，把实例挂到 global 可避免连接数爆炸。
   if (process.env.NODE_ENV !== "production") {
     globalForPrisma.prisma = prismaClient;
   }
@@ -67,6 +77,7 @@ function getPrismaClient() {
 
 export const prisma = new Proxy({} as PrismaClient, {
   get(_target, prop) {
+    // 通过 Proxy 延迟真正创建 PrismaClient，只有第一次访问模型方法时才初始化。
     const value = ((getPrismaClient() as unknown) as Record<PropertyKey, unknown>)[prop];
     if (typeof value === "function") {
       return value.bind(getPrismaClient());
@@ -79,6 +90,7 @@ export const prisma = new Proxy({} as PrismaClient, {
 let seeded = false;
 
 async function ensureSeeded() {
+  // 项目当前内置了“爸爸 / 妈妈”两个体验账号，适合 demo 和适老化场景快速试用。
   if (seeded) return;
 
   try {
@@ -350,6 +362,8 @@ export async function importBigVArticles(articles: BigVArticleInput[]) {
   await ensureSeeded();
   await cleanupExpiredBigVArticles();
 
+  // `[] as Array<...>` 用在“先声明空数组，后续再 push 强类型对象”的场景很常见。
+  // 如果不显式标注，TS 可能会把它推断得过窄，后面 push 时不够友好。
   const results = [] as Array<{
     id: string;
     title: string;

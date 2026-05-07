@@ -10,6 +10,10 @@ import { useWatchlist } from "@/lib/hooks/useWatchlist";
 import { useUser } from "@/lib/hooks/useUser";
 import { getTonghuashunIndexUrl } from "@/lib/utils/stock-links";
 
+// 股票页是典型的 App Router 客户端页面：
+// - useSearchParams 读取 URL 条件
+// - 自定义 hooks 负责数据请求与缓存
+// - Ant Design 负责列表、卡片、搜索框等界面
 const { Title, Paragraph, Text } = Typography;
 const { Search } = Input;
 
@@ -22,6 +26,7 @@ export default function StocksPage() {
   const topicKeyword = searchParams.get("topic")?.trim() ?? "";
 
   const { data: searchResults, isLoading: searchLoading, mutate: mutateSearch } = useStockSearch(
+    // 关键词搜索和题材搜索共用一个页面，但底层走的是两个 hooks / 两套接口。
     topicKeyword ? "" : keyword,
   );
   const { data: topicResults, isLoading: topicLoading, mutate: mutateTopic } = useTopicStocks(topicKeyword);

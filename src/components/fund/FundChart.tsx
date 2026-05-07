@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { Spin } from "antd";
 import type { FundHistoryNav } from "@/types/fund";
 
+// 基金净值图同样使用 ECharts，但通过 next/dynamic 避免 SSR 阶段访问 window/document。
 const ReactEChartsCore = dynamic(() => import("echarts-for-react"), {
   ssr: false,
   loading: () => (
@@ -23,7 +24,7 @@ export default function FundChart({ data, name }: FundChartProps) {
     return <div style={{ textAlign: "center", padding: 40, color: "#999" }}>暂无净值数据</div>;
   }
 
-  // Reverse for chronological order
+  // 天天基金接口常按“最新在前”返回，这里反转成时间正序，方便 ECharts 沿时间轴展示。
   const sorted = [...data].reverse();
   const dates = sorted.map((d) => d.date);
   const navs = sorted.map((d) => d.nav);

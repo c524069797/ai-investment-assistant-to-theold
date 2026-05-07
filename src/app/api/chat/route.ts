@@ -8,12 +8,18 @@ import { fetchMarketIndices } from "@/lib/api/eastmoney";
 import { getSessionUserId } from "@/lib/auth/session";
 import { getChatMemoryContext, saveChatAnalysisSnapshot } from "@/lib/memory/service";
 
+// 这是 App Router 的 Route Handler。
+// 它承担的是“AI 编排层”角色：接收前端 useChat 消息 -> 注入上下文 -> 调 Mastra Agent -> 持久化会话。
+// 因为依赖 cookie、数据库、实时行情和大模型结果，所以强制关闭静态化缓存。
+
 interface UIMessagePart {
   type: string;
   text?: string;
 }
 
 interface IncomingMessage {
+  // 前端传来的 role 在入口先放宽为 string，
+  // 后续再通过 convertMessages 收窄成模型真正需要的字面量联合类型。
   role: string;
   content?: string;
   parts?: UIMessagePart[];
@@ -31,8 +37,14 @@ function extractContent(msg: IncomingMessage): string {
 }
 
 function convertMessages(messages: IncomingMessage[]) {
+  // 前端 useChat 使用的是 UIMessage 结构，模型调用更适合 role + content 结构，
+  // 这里负责做一次“UI 协议 -> LLM 协议”的转换。
   return messages.map((msg) => {
     const content = extractContent(msg);
+
+    // `as const` 的关键作用：
+    // 不让 role 被推断成宽泛的 string，而是固定成 "user" | "system" | "assistant" 字面量，
+    // 这样后续传给模型 SDK 时，类型才能严格匹配消息协议。
     if (msg.role === "user") return { role: "user" as const, content };
     if (msg.role === "system") return { role: "system" as const, content };
     return { role: "assistant" as const, content };
@@ -40,6 +52,7 @@ function convertMessages(messages: IncomingMessage[]) {
 }
 
 function buildFriendlyChatError(error: unknown) {
+  // `unknown` 比 `any` 更安全：必须先做类型收窄，才能访问 message 等属性。
   const raw = error instanceof Error ? error.message : String(error);
   if (raw.includes("未登录")) {
     return "抱歉，当前登录状态已失效，请重新登录后再继续对话。";
@@ -60,6 +73,7 @@ function buildFriendlyChatError(error: unknown) {
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string) {
+  // 大模型和外部数据源都可能卡住；统一加超时可以避免前端一直 pending。
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(message)), ms);
     promise
@@ -87,6 +101,8 @@ function shouldInjectMarketOverview(text: string) {
 }
 
 async function buildMarketOverviewContext() {
+  // 这是一个很典型的 RAG-lite 做法：
+  // 不走向量库，直接把“当前实时大盘数据”作为 system context 注入给模型。
   const indices = await fetchMarketIndices();
   const validIndices = indices.filter((item) => item.price > 0);
 
@@ -96,6 +112,8 @@ async function buildMarketOverviewContext() {
 
   const primaryIndices = ["上证指数", "深证成指", "创业板指", "沪深300", "中证500"]
     .map((name) => validIndices.find((item) => item.name === name))
+    // 这是另一个 TS 精髓点：filter 里写类型谓词，
+    // 让 `item` 从 `MarketIndex | undefined` 收窄成确定存在的 `MarketIndex`。
     .filter((item): item is NonNullable<typeof item> => !!item);
 
   const lines = primaryIndices.map((item) => (
@@ -108,6 +126,10 @@ async function buildMarketOverviewContext() {
 const FALLBACK_CHAT_SYSTEM_PROMPT = "你是一位专业、耐心、通俗易懂的中文投资助手，名字叫小智。请用简洁中文回答，避免复杂术语；如果已经拿到系统提供的实时市场数据，就直接用这些数据分析，不要再让用户补充；最后补一句‘投资有风险，入市需谨慎。’";
 
 async function requestOpenAICompatibleFallback(messages: ReturnType<typeof convertMessages>) {
+  // `ReturnType<typeof convertMessages>` 是很实用的 TS 技巧：
+  // 不重复手写消息类型，而是直接复用 convertMessages 的返回值类型，避免类型漂移。
+  // Agent 失败时降级到“直接请求 OpenAI Compatible 接口”，
+  // 这样即使工具编排层异常，基础问答仍尽量可用。
   const apiKey = process.env.OPENAI_API_KEY;
   const baseUrl = normalizeBaseUrl(process.env.OPENAI_BASE_URL);
   const model = process.env.OPENAI_MODEL || "gpt-5.4";
@@ -145,11 +167,13 @@ async function requestOpenAICompatibleFallback(messages: ReturnType<typeof conve
 
 export async function POST(request: NextRequest) {
   try {
+    // 第一步：从 httpOnly session cookie 中识别当前用户。
     const userId = getSessionUserId(request);
     if (!userId) {
       return NextResponse.json({ error: "未登录" }, { status: 401 });
     }
 
+    // 第二步：解析前端 useChat 发送来的消息体。
     const body = await request.json();
     const { messages, sessionId } = body;
 
@@ -160,6 +184,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "sessionId is required" }, { status: 400 });
     }
 
+    // 第三步：确保会话存在，聊天记录会落到数据库中。
     const chatSession = await ensureChatSession(userId, sessionId);
 
     const coreMessages = convertMessages(messages);
@@ -179,6 +204,7 @@ export async function POST(request: NextRequest) {
 
     if (userContent) {
       try {
+        // 第四步：从“投资偏好 + 自选 thesis + 历史分析快照”中拼接个性化上下文。
         const memoryContext = await getChatMemoryContext(userId, { query: userContent });
         if (memoryContext.context.trim()) {
           systemContexts.push(memoryContext.context);
@@ -198,6 +224,7 @@ export async function POST(request: NextRequest) {
 
     if (userContent && shouldInjectMarketOverview(userContent)) {
       try {
+        // 第五步：如果用户问到大盘，就自动补充实时指数数据，减少“先给我数据”的来回对话。
         const marketContext = await buildMarketOverviewContext();
         if (marketContext) {
           systemContexts.push(marketContext);
@@ -208,6 +235,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (systemContexts.length) {
+      // 最终消息序列 = 系统上下文 + 原始对话消息。
       effectiveMessages = [
         ...systemContexts.map((content) => ({ role: "system" as const, content })),
         ...coreMessages,
@@ -217,6 +245,7 @@ export async function POST(request: NextRequest) {
     let assistantContent = "";
 
     try {
+      // 第六步：优先走 Mastra Agent，让模型可以自主调用股票/基金/新闻/热点等工具。
       const result = await withTimeout(
         investmentAgent.generate(effectiveMessages, {
           maxSteps: 8,
@@ -231,6 +260,7 @@ export async function POST(request: NextRequest) {
 
     if (!assistantContent) {
       try {
+        // 第七步：Agent 失败则降级为纯模型问答，保证服务韧性。
         assistantContent = sanitizeAssistantText(
           await withTimeout(requestOpenAICompatibleFallback(effectiveMessages), 20000, "AI fallback timeout"),
         ).trim();
@@ -244,10 +274,12 @@ export async function POST(request: NextRequest) {
       assistantContent = "抱歉，这次没有拿到有效回复，请您稍后再试。";
     }
 
+    // 第八步：持久化 AI 回复，保证历史会话可回看。
     await addChatMessage(sessionId, "assistant", assistantContent);
 
     if (userContent && assistantContent) {
       try {
+        // 第九步：把有效分析沉淀成 snapshot，供后续记忆上下文复用。
         await saveChatAnalysisSnapshot({
           userId,
           userContent,

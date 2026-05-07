@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserByUsername } from "@/lib/db";
 import { createSessionToken, SESSION_COOKIE } from "@/lib/auth";
 
+// Next.js Route Handler：负责把“角色选择”转换成 session cookie。
+// 当前项目走的是轻量登录流：选角色 -> 服务端签发 cookie -> proxy.ts 放行后续页面。
 export async function POST(request: NextRequest) {
   try {
     const { username } = await request.json();
@@ -26,6 +28,8 @@ export async function POST(request: NextRequest) {
       data: { id: user.id, username: user.username, name: user.name, avatar: user.avatar },
     });
 
+    // httpOnly cookie 让前端 JS 不能直接读取 token，
+    // 之后页面请求会自动携带 cookie，供 Route Handler / proxy.ts 做服务端鉴权。
     response.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

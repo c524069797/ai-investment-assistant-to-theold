@@ -13,6 +13,12 @@ import {
   type WatchlistThesisData,
 } from "./shared";
 
+// 这是项目里的“轻量记忆层”：
+// - profile：用户投资偏好
+// - thesis：用户对某只股票/基金的跟踪逻辑
+// - snapshot：聊天后沉淀出来的分析摘要
+// 聊天接口不会把整库数据都喂给模型，而是按 query 动态挑选最相关的上下文。
+
 function createStableId(prefix: string, ...parts: Array<string | number>) {
   return `${prefix}-${createHash("sha1").update(parts.join("::")).digest("hex").slice(0, 20)}`;
 }
@@ -186,6 +192,7 @@ export async function saveChatAnalysisSnapshot(params: {
   assistantContent: string;
   matchedThesis?: { code: string; market?: number | null; type?: string; name?: string | null } | null;
 }) {
+  // 这是“对话 -> 结构化记忆”的落盘入口。
   const code = params.matchedThesis?.code || extractStockCodeFromText(params.userContent);
   if (!code) {
     return null;
@@ -211,6 +218,7 @@ export async function getChatMemoryContext(
   userId: string,
   input: { query: string; code?: string; market?: number },
 ) {
+  // 并行拉取“用户偏好 + 自选 thesis”，减少聊天接口等待时间。
   const [profile, theses] = await Promise.all([
     getUserInvestmentProfile(userId),
     listWatchlistTheses(userId),

@@ -2,6 +2,12 @@ import type { StockQuote, StockSearchResult, StockKLinePoint, MarketIndex, Stock
 import { MARKET_INDICES } from "@/lib/constants/market";
 import type { KLinePeriod } from "@/types/stock";
 
+// 行情数据层的技术思路：
+// - 搜索：优先走东方财富搜索接口
+// - 实时行情 / K线：优先走腾讯财经接口
+// 原因是一些 EastMoney push2 接口在不同网络环境下更容易被拦截，
+// 因此这里做了“多源拼装”，对上层页面仍然暴露统一的 TypeScript 类型。
+
 // 东方财富搜索 API (可用)
 const SEARCH_BASE = "https://searchapi.eastmoney.com/api/suggest/get";
 
@@ -27,6 +33,7 @@ export async function fetchStockQuote(market: number, code: string): Promise<Sto
   const symbol = buildTencentSymbol(market, code);
   const url = `${TENCENT_QT_BASE}/q=${symbol}`;
 
+  // Next.js 服务端 fetch 自带缓存能力；这里通过 revalidate=10 实现轻量 ISR 式数据复用。
   const res = await fetch(url, { next: { revalidate: 10 } });
   const buffer = await res.arrayBuffer();
   const text = new TextDecoder("gbk").decode(buffer);
@@ -67,6 +74,7 @@ export async function fetchStockQuote(market: number, code: string): Promise<Sto
 export async function searchStocks(keyword: string): Promise<StockSearchResult[]> {
   const url = `${SEARCH_BASE}?input=${encodeURIComponent(keyword)}&type=14&token=D43BF722C8E33BDC906FB84D85E326E8&count=20`;
 
+  // 先搜基础信息，再批量补齐实时价格，避免页面侧自己拼多个数据源。
   const res = await fetch(url, { next: { revalidate: 60 } });
   const json = await res.json();
 
@@ -197,6 +205,9 @@ export async function searchTopicStocks(keyword: string, count: number = 10): Pr
 
 /** 腾讯 K 线周期映射 */
 const TENCENT_KLINE_PERIOD: Record<KLinePeriod, string> = {
+  // `Record<KLinePeriod, string>` 表示：
+  // KLinePeriod 联合类型里的每个成员，都必须在这里有对应值。
+  // 少一个 key 或写错 key，TS 都会直接报错。
   daily: "day",
   weekly: "week",
   monthly: "month",
@@ -210,6 +221,9 @@ export async function fetchStockKLine(
   count: number = 120,
 ): Promise<StockKLinePoint[]> {
   const symbol = buildTencentSymbol(market, code);
+
+  // 统一把外部 K 线格式转换成项目自己的 StockKLinePoint，
+  // 这样图表组件、技术分析工具、API 路由都能复用同一种数据结构。
   const tPeriod = TENCENT_KLINE_PERIOD[period];
   // 腾讯 K 线 API: param=symbol,period,startDate,,count,qfq(前复权)
   const url = `${TENCENT_KLINE_BASE}?param=${symbol},${tPeriod},,,${count},qfq`;
@@ -249,6 +263,8 @@ export async function fetchStockKLine(
 }
 
 /** A股热门股票池 (沪深300核心成分 + 中证500活跃个股) */
+// `as const` 会把二维数组里的值固定成只读字面量，
+// 避免被推断成宽泛的 `(string | number)[][]`。
 const STOCK_POOL = [
   // 沪深300 大盘蓝筹 [market, code]
   [1,"600519"],[0,"000858"],[1,"601318"],[0,"000651"],[0,"000333"],
@@ -301,6 +317,7 @@ export async function fetchStockRanking(count: number = 50): Promise<StockRankin
 
 /** 获取大盘指数 (腾讯财经 API) */
 export async function fetchMarketIndices(): Promise<MarketIndex[]> {
+  // 指数列表集中放在 constants 中，页面层只管“我要哪些指数”，数据源细节留在这里。
   const symbols = MARKET_INDICES.map(([m, c]) => buildTencentSymbol(m, c)).join(",");
   const url = `${TENCENT_QT_BASE}/q=${symbols}`;
 
