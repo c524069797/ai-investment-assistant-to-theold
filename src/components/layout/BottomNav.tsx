@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import {
   HomeOutlined,
   RobotOutlined,
@@ -47,8 +48,30 @@ export default function BottomNav() {
             className="bottom-nav-item"
             data-active={isActive}
           >
-            <span className="bottom-nav-icon">{item.icon}</span>
+            <motion.span
+              className="bottom-nav-icon"
+              animate={isActive ? { scale: 1.1, y: -2 } : { scale: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              {item.icon}
+            </motion.span>
             <span>{item.label}</span>
+            {isActive && (
+              <motion.div
+                layoutId="bottom-nav-indicator"
+                style={{
+                  position: "absolute",
+                  bottom: 0,
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  width: 20,
+                  height: 3,
+                  borderRadius: 2,
+                  background: "var(--accent-strong)",
+                }}
+                transition={{ duration: 0.2 }}
+              />
+            )}
           </Link>
         );
       })}

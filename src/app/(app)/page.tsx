@@ -14,6 +14,7 @@ import {
   ThunderboltOutlined,
 } from "@ant-design/icons";
 import { Button, Card, Empty, Skeleton, Typography } from "antd";
+import { motion } from "framer-motion";
 import Link from "next/link";
 import { useMemo } from "react";
 import useSWR from "swr";
@@ -22,6 +23,7 @@ import { useUser } from "@/lib/hooks/useUser";
 import { useWatchlist } from "@/lib/hooks/useWatchlist";
 import { formatPercent, formatPrice, getPriceColor } from "@/styles/stock-colors";
 import type { MarketIndex } from "@/types/stock";
+import { FadeInUp, StaggerContainer, StaggerItem } from "@/components/ui/Animations";
 
 const { Text } = Typography;
 
@@ -302,75 +304,98 @@ function DashboardHero({
       <div className="modern-dashboard-stage__backdrop" />
       <div className="modern-dashboard-stage__grid">
         <div className="modern-dashboard-stage__main">
-          <div className="modern-dashboard-stage__eyebrow">适老化 · AI 投研助手</div>
-          <h1 className="modern-dashboard-stage__title">今天先看什么？</h1>
-          <div className="modern-dashboard-stage__summary">{summary}</div>
-          <Text className="modern-dashboard-stage__advice">{sentiment.advice}</Text>
-          <div className="modern-dashboard-stage__actions">
-            <Link href="/chat">
-              <Button type="primary" icon={<AudioOutlined />}>打开 AI 分析</Button>
-            </Link>
-            <Link href="/strategy">
-              <Button icon={<SolutionOutlined />}>查看今日策略</Button>
-            </Link>
-          </div>
-          <div className="modern-dashboard-stage__quick-links">
-            {ASK_AI_ACTIONS.map((item) => (
-              <Link key={item.title} href={buildPromptChatLink(item.title, item.prompt)} className="modern-dashboard-stage__quick-link">
-                {item.title}
+          <FadeInUp delay={0.1}>
+            <div className="modern-dashboard-stage__eyebrow">适老化 · AI 投研助手</div>
+          </FadeInUp>
+          <FadeInUp delay={0.2}>
+            <h1 className="modern-dashboard-stage__title">今天先看什么？</h1>
+          </FadeInUp>
+          <FadeInUp delay={0.3}>
+            <div className="modern-dashboard-stage__summary">{summary}</div>
+          </FadeInUp>
+          <FadeInUp delay={0.4}>
+            <Text className="modern-dashboard-stage__advice">{sentiment.advice}</Text>
+          </FadeInUp>
+          <FadeInUp delay={0.5}>
+            <div className="modern-dashboard-stage__actions">
+              <Link href="/chat">
+                <Button type="primary" icon={<AudioOutlined />}>打开 AI 分析</Button>
               </Link>
-            ))}
-          </div>
-        </div>
-
-        <div className="modern-dashboard-stage__focus-card">
-          <span className="modern-dashboard-stage__focus-label">今日焦点</span>
-          <strong className="modern-dashboard-stage__focus-title">{spotlightName}</strong>
-          <span className="modern-dashboard-stage__focus-desc">{spotlightDesc}</span>
-          <div className="modern-dashboard-stage__stats-grid">
-            <div className="modern-dashboard-stage__stat-card">
-              <span className="modern-dashboard-stage__stat-label">市场情绪</span>
-              <strong className="modern-dashboard-stage__stat-value">{sentiment.label}（{sentiment.score}）</strong>
-              <span className="modern-dashboard-stage__stat-hint">当前盘面偏向 {sentiment.label}</span>
+              <Link href="/strategy">
+                <Button icon={<SolutionOutlined />}>查看今日策略</Button>
+              </Link>
             </div>
-            <div className="modern-dashboard-stage__stat-card">
-              <span className="modern-dashboard-stage__stat-label">指数涨跌</span>
-              <strong className="modern-dashboard-stage__stat-value">{sentiment.risingCount} 涨 / {sentiment.fallingCount} 跌</strong>
-              <span className="modern-dashboard-stage__stat-hint">先看广度，再看主线</span>
-            </div>
-            <div className="modern-dashboard-stage__stat-card">
-              <span className="modern-dashboard-stage__stat-label">自选股票</span>
-              <strong className="modern-dashboard-stage__stat-value">{watchlistCount}</strong>
-              <span className="modern-dashboard-stage__stat-hint">重点标的可并排跟踪</span>
-            </div>
-            <div className="modern-dashboard-stage__stat-card">
-              <span className="modern-dashboard-stage__stat-label">优先方向</span>
-              <strong className="modern-dashboard-stage__stat-value">{strongestWatchlist ? "自选强势" : strongestIndex ? "指数领涨" : "等待确认"}</strong>
-              <span className="modern-dashboard-stage__stat-hint">先看强，再决定仓位节奏</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="modern-dashboard-stage__signal-board">
-          <div className="modern-dashboard-stage__signal-head">
-            <span>核心风向</span>
-            <strong>实时指数板</strong>
-          </div>
-          <div className="modern-dashboard-stage__signal-list">
-            {spotlightIndices.map((item) => {
-              const color = getPriceColor(item.changePercent);
-
-              return (
-                <Link key={item.code} href={buildPromptChatLink(`${item.name}分析`, buildIndexPrompt(item))} className="modern-dashboard-stage__signal-card">
-                  <span className="modern-dashboard-stage__signal-name">{item.name}</span>
-                  <strong className="modern-dashboard-stage__signal-price">{formatPrice(item.price)}</strong>
-                  <span className="modern-dashboard-stage__signal-change" style={{ color }}>{formatPercent(item.changePercent)}</span>
-                  <span className="modern-dashboard-stage__signal-note">{getIndexComment(item)}</span>
+          </FadeInUp>
+          <FadeInUp delay={0.6}>
+            <div className="modern-dashboard-stage__quick-links">
+              {ASK_AI_ACTIONS.map((item) => (
+                <Link key={item.title} href={buildPromptChatLink(item.title, item.prompt)} className="modern-dashboard-stage__quick-link">
+                  {item.title}
                 </Link>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          </FadeInUp>
         </div>
+
+        <FadeInUp delay={0.4}>
+          <div className="modern-dashboard-stage__focus-card">
+            <span className="modern-dashboard-stage__focus-label">今日焦点</span>
+            <strong className="modern-dashboard-stage__focus-title">{spotlightName}</strong>
+            <span className="modern-dashboard-stage__focus-desc">{spotlightDesc}</span>
+            <div className="modern-dashboard-stage__stats-grid">
+              <div className="modern-dashboard-stage__stat-card">
+                <span className="modern-dashboard-stage__stat-label">市场情绪</span>
+                <strong className="modern-dashboard-stage__stat-value">{sentiment.label}（{sentiment.score}）</strong>
+                <span className="modern-dashboard-stage__stat-hint">当前盘面偏向 {sentiment.label}</span>
+              </div>
+              <div className="modern-dashboard-stage__stat-card">
+                <span className="modern-dashboard-stage__stat-label">指数涨跌</span>
+                <strong className="modern-dashboard-stage__stat-value">{sentiment.risingCount} 涨 / {sentiment.fallingCount} 跌</strong>
+                <span className="modern-dashboard-stage__stat-hint">先看广度，再看主线</span>
+              </div>
+              <div className="modern-dashboard-stage__stat-card">
+                <span className="modern-dashboard-stage__stat-label">自选股票</span>
+                <strong className="modern-dashboard-stage__stat-value">{watchlistCount}</strong>
+                <span className="modern-dashboard-stage__stat-hint">重点标的可并排跟踪</span>
+              </div>
+              <div className="modern-dashboard-stage__stat-card">
+                <span className="modern-dashboard-stage__stat-label">优先方向</span>
+                <strong className="modern-dashboard-stage__stat-value">{strongestWatchlist ? "自选强势" : strongestIndex ? "指数领涨" : "等待确认"}</strong>
+                <span className="modern-dashboard-stage__stat-hint">先看强，再决定仓位节奏</span>
+              </div>
+            </div>
+          </div>
+        </FadeInUp>
+
+        <FadeInUp delay={0.5}>
+          <div className="modern-dashboard-stage__signal-board">
+            <div className="modern-dashboard-stage__signal-head">
+              <span>核心风向</span>
+              <strong>实时指数板</strong>
+            </div>
+            <div className="modern-dashboard-stage__signal-list">
+              {spotlightIndices.map((item, index) => {
+                const color = getPriceColor(item.changePercent);
+
+                return (
+                  <motion.div
+                    key={item.code}
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.6 + index * 0.1, duration: 0.3 }}
+                  >
+                    <Link href={buildPromptChatLink(`${item.name}分析`, buildIndexPrompt(item))} className="modern-dashboard-stage__signal-card">
+                      <span className="modern-dashboard-stage__signal-name">{item.name}</span>
+                      <strong className="modern-dashboard-stage__signal-price">{formatPrice(item.price)}</strong>
+                      <span className="modern-dashboard-stage__signal-change" style={{ color }}>{formatPercent(item.changePercent)}</span>
+                      <span className="modern-dashboard-stage__signal-note">{getIndexComment(item)}</span>
+                    </Link>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        </FadeInUp>
       </div>
     </section>
   );
@@ -700,44 +725,60 @@ export default function HomePage() {
           strongestWatchlist={strongestWatchlist}
         />
 
-        <div className="modern-dashboard-desktop-grid">
-          <div className="modern-dashboard-desktop-span-5">
+        <StaggerContainer className="modern-dashboard-desktop-grid">
+          <StaggerItem className="modern-dashboard-desktop-span-5">
             <AskAIPanel />
-          </div>
-          <div className="modern-dashboard-desktop-span-3">
+          </StaggerItem>
+          <StaggerItem className="modern-dashboard-desktop-span-3">
             <SentimentPanel sentiment={sentiment} />
-          </div>
-          <div className="modern-dashboard-desktop-span-4">
+          </StaggerItem>
+          <StaggerItem className="modern-dashboard-desktop-span-4">
             <MarketPulsePanel sentiment={sentiment} indices={desktopIndices} watchlist={watchlistSummary} />
-          </div>
-          <div className="modern-dashboard-desktop-span-7">
+          </StaggerItem>
+          <StaggerItem className="modern-dashboard-desktop-span-7">
             <WatchlistPanel items={watchlistSummary} loading={watchlistLoading} />
-          </div>
-          <div className="modern-dashboard-desktop-span-5">
+          </StaggerItem>
+          <StaggerItem className="modern-dashboard-desktop-span-5">
             <StrategyPanel sentiment={sentiment} watchlist={watchlistSummary} />
-          </div>
-        </div>
+          </StaggerItem>
+        </StaggerContainer>
 
-        <HotspotFlowPanel items={hotspotScan} loading={hotspotLoading} />
-        <DesktopIndexSection indices={desktopIndices} loading={indicesLoading} />
+        <FadeInUp delay={0.3}>
+          <HotspotFlowPanel items={hotspotScan} loading={hotspotLoading} />
+        </FadeInUp>
+        <FadeInUp delay={0.4}>
+          <DesktopIndexSection indices={desktopIndices} loading={indicesLoading} />
+        </FadeInUp>
       </section>
 
       <section className="modern-dashboard-mobile mobile-reference-dashboard">
-        <DashboardTitle summary={summary} />
+        <FadeInUp>
+          <DashboardTitle summary={summary} />
+        </FadeInUp>
 
-        <div className="mobile-reference-grid mobile-reference-grid--cards" style={{ marginBottom: 12 }}>
-          <AskAIPanel />
-          <SentimentPanel sentiment={sentiment} />
-          <WatchlistPanel items={watchlistSummary} loading={watchlistLoading} />
-          <StrategyPanel sentiment={sentiment} watchlist={watchlistSummary} />
-        </div>
+        <StaggerContainer className="mobile-reference-grid mobile-reference-grid--cards" style={{ marginBottom: 12 }}>
+          <StaggerItem>
+            <AskAIPanel />
+          </StaggerItem>
+          <StaggerItem>
+            <SentimentPanel sentiment={sentiment} />
+          </StaggerItem>
+          <StaggerItem>
+            <WatchlistPanel items={watchlistSummary} loading={watchlistLoading} />
+          </StaggerItem>
+          <StaggerItem>
+            <StrategyPanel sentiment={sentiment} watchlist={watchlistSummary} />
+          </StaggerItem>
+        </StaggerContainer>
 
         {indicesLoading ? (
           <Card className="modern-dashboard-panel" style={{ marginBottom: 8 }}>
             <Skeleton active paragraph={{ rows: 3 }} title={false} />
           </Card>
         ) : coreIndices.length ? (
-          <IndexTiles indices={coreIndices} compact />
+          <FadeInUp delay={0.2}>
+            <IndexTiles indices={coreIndices} compact />
+          </FadeInUp>
         ) : (
           <Card className="modern-dashboard-panel" style={{ marginBottom: 8 }}>
             <Empty description="暂无指数数据" />
