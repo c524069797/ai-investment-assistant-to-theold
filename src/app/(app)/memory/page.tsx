@@ -7,6 +7,7 @@ import { useUser } from "@/lib/hooks/useUser";
 import { useWatchlist } from "@/lib/hooks/useWatchlist";
 import UserInvestmentProfileCard from "@/components/memory/UserInvestmentProfileCard";
 import StockMemoryCard from "@/components/memory/StockMemoryCard";
+import MarketingVisual from "@/components/marketing/MarketingVisual";
 
 const { Paragraph, Title } = Typography;
 
@@ -32,6 +33,12 @@ export default function MemoryPage() {
           <Paragraph className="guest-gate-card__desc">
             记忆中心会保存你的投资画像、自选股关注逻辑和聊天分析快照。游客模式不会写入个人数据，适合先浏览功能。
           </Paragraph>
+          <MarketingVisual
+            alt="投资记忆中心界面展示"
+            className="guest-gate-card__media"
+            src="/marketing/hero-agents.png"
+            tone="compact"
+          />
           <div className="guest-gate-card__actions">
             <Link href="/login">
               <Button type="primary" size="large">选择身份登录</Button>
@@ -47,17 +54,25 @@ export default function MemoryPage() {
 
   return (
     <div className="page-container">
-      <Space direction="vertical" size={4} style={{ marginBottom: 16 }}>
-        <Space wrap>
-          <Link href="/watchlist">
-            <Button icon={<ArrowLeftOutlined />}>返回自选</Button>
-          </Link>
+      <div className="summary-card marketing-strip-card" style={{ padding: 20, marginBottom: 16 }}>
+        <Space direction="vertical" size={4}>
+          <Space wrap>
+            <Link href="/watchlist">
+              <Button icon={<ArrowLeftOutlined />}>返回自选</Button>
+            </Link>
+          </Space>
+          <Title level={3} style={{ marginBottom: 0 }}>🧠 {currentUser?.name ?? "我的"} MemBrain 记忆中心</Title>
+          <Paragraph style={{ marginBottom: 0, color: "#666" }}>
+            先管理投资画像，再补齐每只自选股的关注逻辑。后续聊天时，AI 会参考这些长期记忆，而不是每次都从零开始理解你。
+          </Paragraph>
         </Space>
-        <Title level={3} style={{ marginBottom: 0 }}>🧠 {currentUser?.name ?? "我的"} MemBrain 记忆中心</Title>
-        <Paragraph style={{ marginBottom: 0, color: "#666" }}>
-          先管理投资画像，再补齐每只自选股的关注逻辑。后续聊天时，AI 会参考这些长期记忆，而不是每次都从零开始理解你。
-        </Paragraph>
-      </Space>
+        <MarketingVisual
+          alt="个人投资记忆与自选逻辑界面展示"
+          className="marketing-strip-card__media"
+          src="/marketing/hero-agents.png"
+          tone="compact"
+        />
+      </div>
 
       <Space direction="vertical" size={16} style={{ width: "100%" }}>
         <UserInvestmentProfileCard />

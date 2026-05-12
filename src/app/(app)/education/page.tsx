@@ -3,6 +3,7 @@
 import { Card, Tag, Typography } from "antd";
 import { LESSONS } from "@/lib/constants/education";
 import LessonCard from "@/components/education/LessonCard";
+import MarketingVisual from "@/components/marketing/MarketingVisual";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -26,6 +27,17 @@ export default function EducationPage() {
               <Tag color="volcano">通俗讲解</Tag>
               <Tag color="orange">边学边看盘</Tag>
             </div>
+            <div className="education-pathway" aria-label="推荐学习路径">
+              {beginnerLessons.map((lesson) => (
+                <div key={lesson.id} className="education-pathway__item">
+                  <span className="education-pathway__order">0{lesson.order}</span>
+                  <div>
+                    <strong>{lesson.title}</strong>
+                    <span>{lesson.description}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="education-stats-grid">
@@ -44,6 +56,12 @@ export default function EducationPage() {
               <strong className="education-stat-card__value education-stat-card__value--small">{latestLesson?.title ?? "持续更新中"}</strong>
               <span className="education-stat-card__hint">建议学完基础后继续进阶</span>
             </div>
+            <MarketingVisual
+              alt="投资学堂课程学习界面展示"
+              className="education-hero__media"
+              src="/marketing/hero-education.png"
+              tone="compact"
+            />
           </div>
         </div>
       </Card>

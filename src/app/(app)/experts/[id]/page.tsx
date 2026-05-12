@@ -6,6 +6,7 @@ import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { getBigVArticleById } from "@/lib/db";
+import ChatHandoffLink from "@/components/chat/ChatHandoffLink";
 
 function sentimentLabel(sentiment: string) {
   if (sentiment === "bullish") return { text: "偏多", className: "expert-detail-badge expert-detail-badge--bullish" };
@@ -29,12 +30,13 @@ export default async function ExpertDetailPage({ params }: { params: Promise<{ i
         <Link href="/experts" className="expert-detail-btn expert-detail-btn--default">
           ← 返回大V分析
         </Link>
-        <Link
-          href={`/chat?title=${encodeURIComponent(`${article.author.name}观点解读`)}&prompt=${encodeURIComponent(`请结合最近收录的大V观点，重点分析${article.author.name}今天对《${article.title}》的核心看法，并用通俗方式总结给我。`)}`}
+        <ChatHandoffLink
+          title={`${article.author.name}观点解读`}
+          prompt={`请结合最近收录的大V观点，重点分析${article.author.name}今天对《${article.title}》的核心看法，并用通俗方式总结给我。`}
           className="expert-detail-btn expert-detail-btn--primary"
         >
           交给 AI 解读
-        </Link>
+        </ChatHandoffLink>
         {article.sourceUrl ? (
           <a href={article.sourceUrl} target="_blank" rel="noreferrer" className="expert-detail-btn expert-detail-btn--default">
             原文链接

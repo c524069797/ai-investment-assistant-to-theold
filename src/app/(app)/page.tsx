@@ -14,7 +14,6 @@ import {
   ThunderboltOutlined,
 } from "@ant-design/icons";
 import { Button, Card, Empty, Skeleton, Typography } from "antd";
-import { motion } from "framer-motion";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
@@ -25,6 +24,7 @@ import { formatPercent, formatPrice, getPriceColor } from "@/styles/stock-colors
 import type { MarketIndex } from "@/types/stock";
 import { FadeInUp, StaggerContainer, StaggerItem } from "@/components/ui/Animations";
 import DailyBriefingCard from "@/components/dashboard/DailyBriefingCard";
+import ChatHandoffLink from "@/components/chat/ChatHandoffLink";
 
 const { Text } = Typography;
 
@@ -101,10 +101,6 @@ function fetcher<T>(url: string): Promise<T> {
       }
       return json.data as T;
     });
-}
-
-function buildPromptChatLink(title: string, prompt: string) {
-  return `/chat?title=${encodeURIComponent(title)}&prompt=${encodeURIComponent(prompt)}`;
 }
 
 function buildIndexPrompt(index: MarketIndex) {
@@ -299,6 +295,12 @@ function DashboardHero({
       ? `${strongestIndex.name} 当前表现更强，适合作为盘面风向参考。`
       : "先看核心指数和情绪，再决定今天的观察顺序。";
   const spotlightIndices = indices.slice(0, 4);
+  const signalFallbacks = [
+    { name: "上证指数", value: "等待行情", note: "行情返回后展示涨跌与情绪" },
+    { name: "深证成指", value: "等待行情", note: "先保留盘面观察位置" },
+    { name: "创业板指", value: "等待行情", note: "用于判断成长方向强弱" },
+    { name: "沪深300", value: "等待行情", note: "用于观察权重方向" },
+  ];
 
   return (
     <section className="modern-dashboard-stage">
@@ -330,9 +332,9 @@ function DashboardHero({
           <FadeInUp delay={0.6}>
             <div className="modern-dashboard-stage__quick-links">
               {ASK_AI_ACTIONS.map((item) => (
-                <Link key={item.title} href={buildPromptChatLink(item.title, item.prompt)} className="modern-dashboard-stage__quick-link">
+                <ChatHandoffLink key={item.title} title={item.title} prompt={item.prompt} className="modern-dashboard-stage__quick-link">
                   {item.title}
-                </Link>
+                </ChatHandoffLink>
               ))}
             </div>
           </FadeInUp>
@@ -375,26 +377,25 @@ function DashboardHero({
               <strong>实时指数板</strong>
             </div>
             <div className="modern-dashboard-stage__signal-list">
-              {spotlightIndices.map((item, index) => {
+              {spotlightIndices.length ? spotlightIndices.map((item) => {
                 return (
-                  <motion.div
-                    key={item.code}
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.6 + index * 0.1, duration: 0.3 }}
-                  >
-                    <Link href={buildPromptChatLink(`${item.name}分析`, buildIndexPrompt(item))} className="modern-dashboard-stage__signal-card">
-                      <span className="modern-dashboard-stage__signal-name">{item.name}</span>
-                      <strong className="modern-dashboard-stage__signal-price">{formatPrice(item.price)}</strong>
-                      <span className="modern-dashboard-stage__signal-change" data-trend={item.changePercent > 0 ? "up" : item.changePercent < 0 ? "down" : "flat"}>
-                        {item.changePercent > 0 ? "▲ " : item.changePercent < 0 ? "▼ " : ""}
-                        {formatPercent(item.changePercent)}
-                      </span>
-                      <span className="modern-dashboard-stage__signal-note">{getIndexComment(item)}</span>
-                    </Link>
-                  </motion.div>
+                  <ChatHandoffLink key={item.code} title={`${item.name}分析`} prompt={buildIndexPrompt(item)} className="modern-dashboard-stage__signal-card">
+                    <span className="modern-dashboard-stage__signal-name">{item.name}</span>
+                    <strong className="modern-dashboard-stage__signal-price">{formatPrice(item.price)}</strong>
+                    <span className="modern-dashboard-stage__signal-change" data-trend={item.changePercent > 0 ? "up" : item.changePercent < 0 ? "down" : "flat"}>
+                      {item.changePercent > 0 ? "▲ " : item.changePercent < 0 ? "▼ " : ""}
+                      {formatPercent(item.changePercent)}
+                    </span>
+                    <span className="modern-dashboard-stage__signal-note">{getIndexComment(item)}</span>
+                  </ChatHandoffLink>
                 );
-              })}
+              }) : signalFallbacks.map((item) => (
+                <div key={item.name} className="modern-dashboard-stage__signal-card modern-dashboard-stage__signal-card--empty">
+                  <span className="modern-dashboard-stage__signal-name">{item.name}</span>
+                  <strong className="modern-dashboard-stage__signal-price">{item.value}</strong>
+                  <span className="modern-dashboard-stage__signal-note">{item.note}</span>
+                </div>
+              ))}
             </div>
           </div>
         </FadeInUp>
@@ -411,9 +412,9 @@ function AskAIPanel() {
       </Link>
       <div className="modern-ask-actions">
         {ASK_AI_ACTIONS.map((item) => (
-          <Link key={item.title} href={buildPromptChatLink(item.title, item.prompt)}>
+          <ChatHandoffLink key={item.title} title={item.title} prompt={item.prompt}>
             <Button type="link">{item.title}</Button>
-          </Link>
+          </ChatHandoffLink>
         ))}
       </div>
     </Card>
@@ -559,7 +560,7 @@ function IndexTiles({ indices, compact }: { indices: MarketIndex[]; compact?: bo
         const color = getPriceColor(item.changePercent);
 
         return (
-          <Link key={item.code} href={buildPromptChatLink(`${item.name}分析`, buildIndexPrompt(item))} className="modern-panel-link">
+          <ChatHandoffLink key={item.code} title={`${item.name}分析`} prompt={buildIndexPrompt(item)} className="modern-panel-link">
             <Card className="modern-dashboard-panel modern-index-tile home-click-card" title={item.name}>
               <div className="modern-index-tile__value">{formatPrice(item.price)}</div>
               <div className="modern-index-tile__change" style={{ color }}>
@@ -571,7 +572,7 @@ function IndexTiles({ indices, compact }: { indices: MarketIndex[]; compact?: bo
                 <div>{formatTurnoverMeta(item)}</div>
               </div>
             </Card>
-          </Link>
+          </ChatHandoffLink>
         );
       })}
     </div>

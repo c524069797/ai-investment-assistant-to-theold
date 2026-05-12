@@ -13,6 +13,7 @@ import Link from "next/link";
 import useSWR from "swr";
 import { getPriceColor, formatPercent, formatAmount } from "@/styles/stock-colors";
 import type { StrategyMode } from "@/lib/constants/market";
+import MarketingVisual from "@/components/marketing/MarketingVisual";
 
 const { Title, Text, Paragraph } = Typography;
 const { Search } = Input;
@@ -32,7 +33,23 @@ export default function StrategyPage() {
 
   return (
     <div className="page-container strategy-page">
-      <Title level={3}>🎯 策略筛选</Title>
+      <Card className="dashboard-hero stocks-hero" style={{ marginBottom: 16 }}>
+        <div className="page-visual-hero">
+          <div className="page-visual-hero__content">
+            <Text className="hero-eyebrow">策略 · 场景筛选</Text>
+            <Title level={2} className="hero-title">策略筛选</Title>
+            <Paragraph className="hero-subtitle">
+              根据保守抄底与热点捕捉两类场景扫描机会，把筛选结果交给 AI 做进一步解释。
+            </Paragraph>
+          </div>
+          <MarketingVisual
+            alt="AI 策略筛选和风险提示界面展示"
+            className="page-visual-hero__media"
+            src="/marketing/hero-stocks.png"
+            tone="compact"
+          />
+        </div>
+      </Card>
 
       {/* Mode Selector */}
       <Card style={{ marginBottom: 16 }}>

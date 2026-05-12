@@ -10,10 +10,12 @@ import {
   TeamOutlined,
   ReadOutlined,
   FundOutlined,
+  ClusterOutlined,
 } from "@ant-design/icons";
 
 const NAV_ITEMS = [
   { key: "/", icon: <HomeOutlined />, label: "首页" },
+  { key: "/agents", icon: <ClusterOutlined />, label: "Agent" },
   { key: "/chat", icon: <RobotOutlined />, label: "AI助手" },
   { key: "/experts", icon: <TeamOutlined />, label: "大V" },
   { key: "/stocks", icon: <StockOutlined />, label: "股票" },

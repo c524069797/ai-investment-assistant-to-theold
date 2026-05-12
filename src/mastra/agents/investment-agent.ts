@@ -169,7 +169,7 @@ export const INVESTMENT_AGENT_INSTRUCTIONS = `你是一位专业的 AI 投资助
 - 解释技术指标时多用生活化比喻，如"布林线像弹性围栏"、"MACD像跑车和货车赛跑"`;
 
 function normalizeBaseUrl(url?: string) {
-  if (!url) return "https://ice.v.ua/v1";
+  if (!url) return "https://api.siliconflow.cn/v1";
   return url.replace(/\/$/, "");
 }
 
@@ -184,7 +184,7 @@ export const investmentAgent = new Agent({
       apiKey: process.env.OPENAI_API_KEY!,
       baseURL: normalizeBaseUrl(process.env.OPENAI_BASE_URL),
     });
-    return provider.chat(process.env.OPENAI_MODEL || "gpt-5.4");
+    return provider.chat(process.env.OPENAI_MODEL || "Qwen/Qwen2.5-7B-Instruct");
   },
   tools: {
     // tools 会被 Mastra 暴露给模型，模型可按指令自动决定何时调用哪一个工具。

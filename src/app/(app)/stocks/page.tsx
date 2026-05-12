@@ -9,6 +9,7 @@ import StockCard from "@/components/stock/StockCard";
 import { useWatchlist } from "@/lib/hooks/useWatchlist";
 import { useUser } from "@/lib/hooks/useUser";
 import { getTonghuashunIndexUrl } from "@/lib/utils/stock-links";
+import MarketingVisual from "@/components/marketing/MarketingVisual";
 
 // 股票页是典型的 App Router 客户端页面：
 // - useSearchParams 读取 URL 条件
@@ -56,11 +57,21 @@ export default function StocksPage() {
   return (
     <div className="page-container">
       <Card className="dashboard-hero stocks-hero" style={{ marginBottom: 16 }}>
-        <Text className="hero-eyebrow">A股 · 实时行情中心</Text>
-        <Title level={2} className="hero-title">股票查询与筛选</Title>
-        <Paragraph className="hero-subtitle">
-          输入股票代码或名称查看沪深行情，点击热门题材查看该板块成交额最大的股票。
-        </Paragraph>
+        <div className="page-visual-hero">
+          <div className="page-visual-hero__content">
+            <Text className="hero-eyebrow">A股 · 实时行情中心</Text>
+            <Title level={2} className="hero-title">股票查询与筛选</Title>
+            <Paragraph className="hero-subtitle">
+              输入股票代码或名称查看沪深行情，点击热门题材查看该板块成交额最大的股票。
+            </Paragraph>
+          </div>
+          <MarketingVisual
+            alt="股票查询与市场分析界面展示"
+            className="page-visual-hero__media"
+            src="/marketing/hero-stocks.png"
+            tone="compact"
+          />
+        </div>
       </Card>
 
       <div className="responsive-toolbar" style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>

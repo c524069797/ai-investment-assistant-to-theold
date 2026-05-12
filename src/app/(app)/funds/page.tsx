@@ -10,8 +10,10 @@ import type { FundSearchResult } from "@/types/fund";
 import { FUND_TYPES } from "@/lib/constants/market";
 import { useWatchlist } from "@/lib/hooks/useWatchlist";
 import { useUser } from "@/lib/hooks/useUser";
+import MarketingVisual from "@/components/marketing/MarketingVisual";
+import { createChatHandoffHref } from "@/lib/chat/handoff";
 
-const { Title } = Typography;
+const { Title, Paragraph, Text } = Typography;
 const { Search } = Input;
 
 const fetcher = async (url: string) => {
@@ -60,7 +62,23 @@ export default function FundsPage() {
 
   return (
     <div className="page-container">
-      <Title level={3}>基金查询</Title>
+      <Card className="dashboard-hero stocks-hero" style={{ marginBottom: 16 }}>
+        <div className="page-visual-hero">
+          <div className="page-visual-hero__content">
+            <Text className="hero-eyebrow">基金 · 估值跟踪</Text>
+            <Title level={2} className="hero-title">基金查询</Title>
+            <Paragraph className="hero-subtitle">
+              快速检索基金代码、类型与估值变化，把重点产品加入自选后交给 AI 持续跟踪。
+            </Paragraph>
+          </div>
+          <MarketingVisual
+            alt="基金查询与自选跟踪界面展示"
+            className="page-visual-hero__media"
+            src="/marketing/hero-funds.png"
+            tone="compact"
+          />
+        </div>
+      </Card>
 
       <div className="responsive-toolbar" style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap", alignItems: "center" }}>
         <Search
@@ -124,9 +142,10 @@ export default function FundsPage() {
                         message.success(`已加入自选：${fund.name}`);
                       },
                       onOpenAi: () => {
-                        router.push(
-                          `/chat?title=${encodeURIComponent(`${fund.name}分析`)}&prompt=${encodeURIComponent(`请用通俗方式分析基金 ${fund.name}（${fund.code}），重点说明：1）这只基金主要投什么；2）短期走势和波动如何；3）更适合一次买入、定投还是继续观察；4）有哪些主要风险；5）普通投资者现在最该关注什么。`)}`,
-                        );
+                        router.push(createChatHandoffHref({
+                          title: `${fund.name}分析`,
+                          prompt: `请用通俗方式分析基金 ${fund.name}（${fund.code}），重点说明：1）这只基金主要投什么；2）短期走势和波动如何；3）更适合一次买入、定投还是继续观察；4）有哪些主要风险；5）普通投资者现在最该关注什么。`,
+                        }));
                       },
                     }}
                   />

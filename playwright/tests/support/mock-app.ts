@@ -157,6 +157,65 @@ const dailyBriefing = {
   disclosure: "本晨报由多 Agent 编排生成，仅用于盘前信息整理和风险观察，不构成投资建议。",
 };
 
+const agentCatalog = [
+  {
+    id: "global-market-briefing",
+    name: "global-market-briefing",
+    category: "market",
+    title: "全球市场晨报 Agent",
+    description: "登录后接收全球前一交易日股市和财经新闻。",
+    responsibility: "跨市场数据接收、财经新闻提炼、盘前摘要协调。",
+    trigger: "登录后自动触发，也可手动重新生成。",
+    cadence: "每日 / 手动",
+    requiresLogin: true,
+    outputLabel: "盘前晨报",
+  },
+  {
+    id: "watchlist-risk-sentinel",
+    name: "watchlist-risk-sentinel",
+    category: "portfolio",
+    title: "自选风险巡检 Agent",
+    description: "扫描自选股票的当日强弱。",
+    responsibility: "自选池巡检、强弱排序、风险动作建议。",
+    trigger: "手动运行 / 自选池变化后运行。",
+    cadence: "盘中 5 分钟缓存",
+    requiresLogin: true,
+    outputLabel: "自选巡检",
+  },
+  {
+    id: "research-consensus-agent",
+    name: "research-consensus-agent",
+    category: "research",
+    title: "观点共识整理 Agent",
+    description: "整理已收录的大V观点。",
+    responsibility: "观点聚合、标签归类、情绪结构提炼。",
+    trigger: "手动运行 / 内容同步后运行。",
+    cadence: "10 分钟缓存",
+    requiresLogin: true,
+    outputLabel: "观点共识",
+  },
+];
+
+function buildAgentResult(agentId: string) {
+  const item = agentCatalog.find((agent) => agent.id === agentId) ?? agentCatalog[0];
+
+  return {
+    id: item.id,
+    name: item.title,
+    category: item.category,
+    status: "completed",
+    generatedAt: "2026-03-22T08:00:00.000Z",
+    riskLevel: "medium",
+    summary: `${item.title} 已完成运行，生成了可执行的业务建议。`,
+    sections: [
+      { title: "关键结论", items: ["当前系统状态正常。", "建议继续观察市场和自选池变化。"] },
+      { title: "下一步动作", items: ["进入自选管理复核重点标的。", "必要时打开 AI 助手追问细节。"] },
+    ],
+    actions: [{ label: "查看自选管理", href: "/watchlist", variant: "primary" }],
+    disclosure: "Mock Agent 结果仅用于端到端测试。",
+  };
+}
+
 function json(route: Route, body: unknown, status = 200) {
   return route.fulfill({
     status,
@@ -234,6 +293,18 @@ export async function mockAppApi(context: BrowserContext, options: MockAppOption
     if (pathname === "/api/agents/daily-briefing") {
       if (!loggedIn) return json(route, { success: false, error: "未登录" }, 401);
       return json(route, { success: true, data: dailyBriefing });
+    }
+
+    if (pathname === "/api/agents" && method === "GET") {
+      return json(route, { success: true, data: agentCatalog });
+    }
+
+    if (pathname === "/api/agents/run" && method === "POST") {
+      if (!loggedIn) return json(route, { success: false, error: "未登录" }, 401);
+      const body = JSON.parse(request.postData() ?? "{}");
+      const agentIds = Array.isArray(body.agentIds) ? body.agentIds : [body.agentId].filter(Boolean);
+      const data = agentIds.length === 1 ? buildAgentResult(agentIds[0]) : agentIds.map(buildAgentResult);
+      return json(route, { success: true, data });
     }
 
     if (pathname === "/api/stocks" && method === "GET") {

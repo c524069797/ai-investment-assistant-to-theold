@@ -2,7 +2,7 @@ import { Agent } from "@mastra/core/agent";
 import { createOpenAI } from "@ai-sdk/openai";
 
 function normalizeBaseUrl(url?: string) {
-  if (!url) return "https://ice.v.ua/v1";
+  if (!url) return "https://api.siliconflow.cn/v1";
   return url.replace(/\/$/, "");
 }
 
@@ -12,7 +12,7 @@ function createModel() {
     baseURL: normalizeBaseUrl(process.env.OPENAI_BASE_URL),
   });
 
-  return provider.chat(process.env.OPENAI_MODEL || "gpt-5.4");
+  return provider.chat(process.env.OPENAI_MODEL || "Qwen/Qwen2.5-7B-Instruct");
 }
 
 export const globalMarketScoutAgent = new Agent({

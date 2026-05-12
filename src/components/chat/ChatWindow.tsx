@@ -31,9 +31,11 @@ import {
   SendOutlined,
 } from "@ant-design/icons";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useUser } from "@/lib/hooks/useUser";
 import { useFontSize } from "@/components/layout/AntdProvider";
+import MarketingVisual from "@/components/marketing/MarketingVisual";
+import { consumeChatHandoff, getChatStarter } from "@/lib/chat/handoff";
 import MessageBubble from "./MessageBubble";
 
 // 聊天页面的技术组合：
@@ -94,6 +96,14 @@ function buildStockPrompt(code: string, name?: string) {
 
 function buildStockSessionTitle(code: string, name?: string) {
   return name ? `${name}分析` : `${code}分析`;
+}
+
+function autoPromptStorageKey(sessionId: string, prompt: string) {
+  let hash = 0;
+  for (let index = 0; index < prompt.length; index += 1) {
+    hash = Math.imul(31, hash) + prompt.charCodeAt(index) | 0;
+  }
+  return `ai-investment-auto-prompt:${sessionId}:${Math.abs(hash)}`;
 }
 
 function SessionList({
@@ -275,10 +285,16 @@ function ConversationPanel({
   useEffect(() => {
     // 支持“从别的页面带着 prompt 进入聊天”，例如股票卡片上的一键 AI 分析。
     if (initialPrompt && !autoPromptSentRef.current && !initialMessages.length) {
+      const storageKey = autoPromptStorageKey(sessionId, initialPrompt);
+      if (sessionStorage.getItem(storageKey)) {
+        autoPromptSentRef.current = true;
+        return;
+      }
       autoPromptSentRef.current = true;
+      sessionStorage.setItem(storageKey, "sent");
       sendMessage({ text: initialPrompt });
     }
-  }, [initialPrompt, initialMessages.length, sendMessage]);
+  }, [sessionId, initialPrompt, initialMessages.length, sendMessage]);
 
   const handleQuickQuestion = (question: string) => {
     setChatError("");
@@ -334,6 +350,12 @@ function ConversationPanel({
               <Text className="chat-empty-state__desc">
                 你可以直接问大盘情绪、板块强弱、个股位置、自选股优先级和大V观点，我会把每次分析自动整理进历史对话。
               </Text>
+              <MarketingVisual
+                alt="AI 投资助手对话界面展示"
+                className="chat-empty-state__media"
+                src="/marketing/hero-agents.png"
+                tone="compact"
+              />
               <div className="chat-quick-grid chat-quick-grid--stack">
                 {QUICK_QUESTIONS.map((question) => (
                   <button key={question} className="chat-quick-chip chat-quick-chip--red" onClick={() => handleQuickQuestion(question)}>
@@ -402,6 +424,7 @@ export default function ChatWindow() {
   const { currentUser, isLoading: userLoading } = useUser();
   const { fontSize } = useFontSize();
   // `useSearchParams` 是 App Router 的客户端导航 hook，所以当前页面必须是 Client Component。
+  const router = useRouter();
   const searchParams = useSearchParams();
   const screens = useBreakpoint();
   const isMobile = !screens.md;
@@ -419,6 +442,22 @@ export default function ChatWindow() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const handledStockRef = useRef("");
   const handledPromptRef = useRef("");
+  const handledHandoffRef = useRef("");
+  const handledStarterRef = useRef("");
+
+  const loadMessages = useCallback(async (sessionId: string) => {
+    setLoadingMessages(true);
+    try {
+      const data = await fetchJson<ChatMessageRecord[]>(`/api/chat/messages?sessionId=${encodeURIComponent(sessionId)}`);
+      setSessionError("");
+      setInitialMessages(toUiMessages(data));
+    } catch (error) {
+      setInitialMessages([]);
+      setSessionError(error instanceof Error ? error.message : "会话消息加载失败");
+    } finally {
+      setLoadingMessages(false);
+    }
+  }, []);
 
   const loadSessions = useCallback(async () => {
     if (!currentUser) return;
@@ -450,14 +489,17 @@ export default function ChatWindow() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(title ? { title } : {}),
       });
-      await loadSessions();
+      setSessions((current) => {
+        const exists = current.some((item) => item.id === session.id);
+        return exists ? current : [session, ...current];
+      });
       setSelectedSessionId(session.id);
       setInitialMessages([]);
       return session;
     } finally {
       setCreatingSession(false);
     }
-  }, [loadSessions]);
+  }, []);
 
   const renameSession = useCallback(async (sessionId: string, title: string) => {
     await fetchJson("/api/chat/sessions", {
@@ -503,18 +545,62 @@ export default function ChatWindow() {
 
   useEffect(() => {
     if (!selectedSessionId) return;
-    setLoadingMessages(true);
-    fetchJson<ChatMessageRecord[]>(`/api/chat/messages?sessionId=${encodeURIComponent(selectedSessionId)}`)
-      .then((data) => {
-        setSessionError("");
-        setInitialMessages(toUiMessages(data));
+    loadMessages(selectedSessionId);
+  }, [selectedSessionId, loadMessages]);
+
+  useEffect(() => {
+    const handoffId = searchParams.get("handoff") ?? "";
+    if (!handoffId || !currentUser || loadingSessions || creatingSession || handledHandoffRef.current === handoffId) {
+      return;
+    }
+
+    const handoff = consumeChatHandoff(handoffId);
+    handledHandoffRef.current = handoffId;
+    router.replace("/chat", { scroll: false });
+
+    if (!handoff?.prompt) {
+      return;
+    }
+
+    setInitialMessages([]);
+    createSession(handoff.title)
+      .then((session) => {
+        if (session) {
+          setSelectedSessionId(session.id);
+          setPendingPrompt(handoff.prompt);
+        }
       })
-      .catch((error) => {
-        setInitialMessages([]);
-        setSessionError(error instanceof Error ? error.message : "会话消息加载失败");
+      .catch(() => {
+        handledHandoffRef.current = "";
+      });
+  }, [searchParams, currentUser, loadingSessions, creatingSession, createSession, router]);
+
+  useEffect(() => {
+    const starter = searchParams.get("starter") ?? "";
+    if (!starter || !currentUser || loadingSessions || creatingSession || handledStarterRef.current === starter) {
+      return;
+    }
+
+    const handoff = getChatStarter(starter);
+    handledStarterRef.current = starter;
+    router.replace("/chat", { scroll: false });
+
+    if (!handoff?.prompt) {
+      return;
+    }
+
+    setInitialMessages([]);
+    createSession(handoff.title)
+      .then((session) => {
+        if (session) {
+          setSelectedSessionId(session.id);
+          setPendingPrompt(handoff.prompt);
+        }
       })
-      .finally(() => setLoadingMessages(false));
-  }, [selectedSessionId]);
+      .catch(() => {
+        handledStarterRef.current = "";
+      });
+  }, [searchParams, currentUser, loadingSessions, creatingSession, createSession, router]);
 
   useEffect(() => {
     const stock = searchParams.get("stock") ?? "";
@@ -525,17 +611,19 @@ export default function ChatWindow() {
     }
 
     handledStockRef.current = stockKey;
+    setInitialMessages([]);
     createSession(buildStockSessionTitle(stock, stockName))
       .then((session) => {
         if (session) {
           setSelectedSessionId(session.id);
           setPendingPrompt(buildStockPrompt(stock, stockName));
+          router.replace("/chat", { scroll: false });
         }
       })
       .catch(() => {
         handledStockRef.current = "";
       });
-  }, [searchParams, currentUser, loadingSessions, creatingSession, createSession]);
+  }, [searchParams, currentUser, loadingSessions, creatingSession, createSession, router]);
 
   useEffect(() => {
     const prompt = searchParams.get("prompt")?.trim() ?? "";
@@ -546,17 +634,19 @@ export default function ChatWindow() {
     }
 
     handledPromptRef.current = promptKey;
+    setInitialMessages([]);
     createSession(title)
       .then((session) => {
         if (session) {
           setSelectedSessionId(session.id);
           setPendingPrompt(prompt);
+          router.replace("/chat", { scroll: false });
         }
       })
       .catch(() => {
         handledPromptRef.current = "";
       });
-  }, [searchParams, currentUser, loadingSessions, creatingSession, createSession]);
+  }, [searchParams, currentUser, loadingSessions, creatingSession, createSession, router]);
 
   useEffect(() => {
     if (!isMobile) {
@@ -662,7 +752,7 @@ export default function ChatWindow() {
             <div className="chat-loading-panel"><Spin size="large" /></div>
           ) : (
             <ConversationPanel
-              key={`${selectedSessionId}-${initialMessages.length}-${pendingPrompt}`}
+              key={selectedSessionId}
               sessionId={selectedSessionId}
               initialMessages={initialMessages}
               initialPrompt={pendingPrompt || undefined}

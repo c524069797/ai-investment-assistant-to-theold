@@ -16,6 +16,7 @@ import {
   CloseOutlined,
   LoginOutlined,
   LogoutOutlined,
+  ClusterOutlined,
 } from "@ant-design/icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -27,6 +28,7 @@ const { Title } = Typography;
 
 const NAV_ITEMS = [
   { href: "/", label: "首页", icon: <HomeOutlined /> },
+  { href: "/agents", label: "Agent中心", icon: <ClusterOutlined /> },
   { href: "/chat", label: "AI助手", icon: <RobotOutlined /> },
   { href: "/experts", label: "大V观点", icon: <TeamOutlined /> },
   { href: "/stocks", label: "股票", icon: <StockOutlined /> },

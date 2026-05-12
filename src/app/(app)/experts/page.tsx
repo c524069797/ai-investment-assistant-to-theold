@@ -26,6 +26,8 @@ import {
 } from "@ant-design/icons";
 import Link from "next/link";
 import { stripMarkdown, truncateText } from "@/lib/markdown";
+import MarketingVisual from "@/components/marketing/MarketingVisual";
+import ChatHandoffLink from "@/components/chat/ChatHandoffLink";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -236,13 +238,11 @@ export default function ExpertsPage() {
         fixed: "right" as const,
         render: (_: unknown, record: BigVArticle) => (
           <Space size={4} wrap>
-            <Link
-              href={`/chat?title=${encodeURIComponent(`${record.author.name}观点解读`)}&prompt=${encodeURIComponent(buildAIPrompt(record))}`}
-            >
+            <ChatHandoffLink title={`${record.author.name}观点解读`} prompt={buildAIPrompt(record)}>
               <Button type="link" size="small" icon={<MessageOutlined />} className="experts-table-action">
                 AI解读
               </Button>
-            </Link>
+            </ChatHandoffLink>
             {record.sourceUrl ? (
               <a href={record.sourceUrl} target="_blank" rel="noreferrer">
                 <Button type="link" size="small" icon={<LinkOutlined />} className="experts-table-action">
@@ -277,13 +277,14 @@ export default function ExpertsPage() {
                 查看全文
               </Button>
             </Link>
-            <Link
-              href={`/chat?title=${encodeURIComponent(`${record.author.name}观点合集`)}&prompt=${encodeURIComponent(`请综合分析 ${record.author.name} 的观点，结合这篇文章《${record.title}》的核心判断。`)}`}
+            <ChatHandoffLink
+              title={`${record.author.name}观点合集`}
+              prompt={`请综合分析 ${record.author.name} 的观点，结合这篇文章《${record.title}》的核心判断。`}
             >
               <Button size="small" icon={<TeamOutlined />}>
                 合集解读
               </Button>
-            </Link>
+            </ChatHandoffLink>
           </Space>
         </div>
       ),
@@ -301,8 +302,8 @@ export default function ExpertsPage() {
   return (
     <div className="page-container experts-page">
       <Card className="dashboard-hero experts-hero" style={{ marginBottom: 16 }}>
-        <div className="experts-hero__top">
-          <div className="experts-hero__left">
+        <div className="experts-hero__top page-visual-hero">
+          <div className="experts-hero__left page-visual-hero__content">
             <Text className="hero-eyebrow">观点合集</Text>
             <Title level={2} className="hero-title">
               大V观点追踪
@@ -310,12 +311,18 @@ export default function ExpertsPage() {
             <Paragraph className="hero-subtitle" style={{ marginBottom: 0 }}>
               表格展示、可排序筛选、展开看摘要、一键 AI 解读。
             </Paragraph>
+            <div className="experts-hero__stats">
+              <Tag color="red">最近 3 个月</Tag>
+              <Tag color="purple">{uniqueAuthors.length} 位作者</Tag>
+              <Tag color="blue">{articles.length} 篇文章</Tag>
+            </div>
           </div>
-          <div className="experts-hero__stats">
-            <Tag color="red">最近 3 个月</Tag>
-            <Tag color="purple">{uniqueAuthors.length} 位作者</Tag>
-            <Tag color="blue">{articles.length} 篇文章</Tag>
-          </div>
+          <MarketingVisual
+            alt="大V观点追踪与 AI 解读界面展示"
+            className="page-visual-hero__media"
+            src="/marketing/hero-agents.png"
+            tone="compact"
+          />
         </div>
       </Card>
 

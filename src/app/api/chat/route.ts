@@ -63,6 +63,9 @@ function buildFriendlyChatError(error: unknown) {
   if (raw.includes("Invalid JSON response")) {
     return "抱歉，AI 服务当前返回了异常数据，说明上游模型通道不稳定。您可以稍后重试，或先使用股票、自选股和大V分析页面。";
   }
+  if (raw.includes("Invalid token") || raw.includes("invalid token") || raw.includes("401") || raw.includes("unauthorized")) {
+    return "抱歉，AI 模型通道认证失败。系统已切换到兼容模型通道配置，请刷新页面后再试；如果仍失败，请重启本地开发服务以加载最新环境变量。";
+  }
   if (raw.includes("model") || raw.includes("channel") || raw.includes("503") || raw.includes("upstream")) {
     return "抱歉，AI 服务当前暂时不可用，可能是模型通道繁忙或上游接口异常。您可以稍后重试，或先使用股票/自选股页面查看实时分析。";
   }
@@ -90,7 +93,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string) {
 
 function normalizeBaseUrl(url?: string) {
   if (!url) {
-    return "https://ice.v.ua/v1";
+    return "https://api.siliconflow.cn/v1";
   }
   return url.replace(/\/$/, "");
 }
@@ -125,44 +128,52 @@ async function buildMarketOverviewContext() {
 
 const FALLBACK_CHAT_SYSTEM_PROMPT = "你是一位专业、耐心、通俗易懂的中文投资助手，名字叫小智。请用简洁中文回答，避免复杂术语；如果已经拿到系统提供的实时市场数据，就直接用这些数据分析，不要再让用户补充；最后补一句‘投资有风险，入市需谨慎。’";
 
-async function requestOpenAICompatibleFallback(messages: ReturnType<typeof convertMessages>) {
+async function requestOpenAICompatibleChat(messages: ReturnType<typeof convertMessages>) {
   // `ReturnType<typeof convertMessages>` 是很实用的 TS 技巧：
   // 不重复手写消息类型，而是直接复用 convertMessages 的返回值类型，避免类型漂移。
-  // Agent 失败时降级到“直接请求 OpenAI Compatible 接口”，
-  // 这样即使工具编排层异常，基础问答仍尽量可用。
+  // 默认先直接请求 OpenAI Compatible 接口，保证基础问答稳定。
+  // Mastra Agent 作为增强层，不能影响用户最基本的对话可用性。
   const apiKey = process.env.OPENAI_API_KEY;
   const baseUrl = normalizeBaseUrl(process.env.OPENAI_BASE_URL);
-  const model = process.env.OPENAI_MODEL || "gpt-5.4";
+  const models = Array.from(new Set([
+    process.env.OPENAI_MODEL,
+    process.env.OPENAI_FALLBACK_MODEL,
+    "Qwen/Qwen2.5-7B-Instruct",
+    "Qwen/Qwen3-8B",
+  ].filter(Boolean))) as string[];
 
   if (!apiKey) {
     throw new Error("fallback missing api key");
   }
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: FALLBACK_CHAT_SYSTEM_PROMPT },
-        ...messages,
-      ],
-      temperature: 0.6,
-      stream: false,
-    }),
-  });
+  const errors: string[] = [];
+  for (const model of models) {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: FALLBACK_CHAT_SYSTEM_PROMPT },
+          ...messages,
+        ],
+        temperature: 0.6,
+        stream: false,
+      }),
+    });
 
-  const json = await response.json();
-  const content = json?.choices?.[0]?.message?.content;
-
-  if (!response.ok || !content) {
-    throw new Error(json?.error?.message || json?.message || "fallback empty response");
+    const json = await response.json();
+    const content = json?.choices?.[0]?.message?.content;
+    if (response.ok && content) {
+      return typeof content === "string" ? content : String(content);
+    }
+    errors.push(`${model}: ${json?.error?.message || json?.message || response.statusText || "empty response"}`);
   }
 
-  return typeof content === "string" ? content : String(content);
+  throw new Error(errors.join(" | "));
 }
 
 export async function POST(request: NextRequest) {
@@ -245,28 +256,26 @@ export async function POST(request: NextRequest) {
     let assistantContent = "";
 
     try {
-      // 第六步：优先走 Mastra Agent，让模型可以自主调用股票/基金/新闻/热点等工具。
-      const result = await withTimeout(
-        investmentAgent.generate(effectiveMessages, {
-          maxSteps: 8,
-        }),
-        20000,
-        "AI generate timeout",
-      );
-      assistantContent = sanitizeAssistantText(result.text || "").trim();
-    } catch (error) {
-      console.error("[/api/chat] agent generate failed, fallback to direct openai-compatible request", error);
-    }
+      // 第六步：默认直连模型，优先保证对话稳定和响应速度。
+      assistantContent = sanitizeAssistantText(
+        await withTimeout(requestOpenAICompatibleChat(effectiveMessages), 20000, "AI direct chat timeout"),
+      ).trim();
+    } catch (directError) {
+      console.error("[/api/chat] direct openai-compatible request failed, try agent fallback", directError);
 
-    if (!assistantContent) {
       try {
-        // 第七步：Agent 失败则降级为纯模型问答，保证服务韧性。
-        assistantContent = sanitizeAssistantText(
-          await withTimeout(requestOpenAICompatibleFallback(effectiveMessages), 20000, "AI fallback timeout"),
-        ).trim();
-      } catch (error) {
-        console.error("[/api/chat] direct fallback failed", error);
-        assistantContent = buildFriendlyChatError(error);
+        // 第七步：直连失败时再尝试 Mastra Agent 增强层。
+        const result = await withTimeout(
+          investmentAgent.generate(effectiveMessages, {
+            maxSteps: 4,
+          }),
+          20000,
+          "AI agent fallback timeout",
+        );
+        assistantContent = sanitizeAssistantText(result.text || "").trim();
+      } catch (agentError) {
+        console.error("[/api/chat] agent fallback failed", agentError);
+        assistantContent = buildFriendlyChatError(directError);
       }
     }
 

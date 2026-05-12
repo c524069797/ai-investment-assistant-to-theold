@@ -12,6 +12,7 @@ import type { FundEstimate } from "@/types/fund";
 import WatchlistInsightCard from "@/components/stock/WatchlistInsightCard";
 import StockMemoryCard from "@/components/memory/StockMemoryCard";
 import { formatPercent, getPriceColor } from "@/styles/stock-colors";
+import MarketingVisual from "@/components/marketing/MarketingVisual";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -106,6 +107,12 @@ export default function WatchlistPage() {
           <Paragraph className="guest-gate-card__desc">
             游客模式可以浏览行情和课程；选择身份后，可以保存股票/基金自选、查看自选分析，并让 AI 记住你的关注逻辑。
           </Paragraph>
+          <MarketingVisual
+            alt="自选跟踪与 AI 分析界面展示"
+            className="guest-gate-card__media"
+            src="/marketing/hero-stocks.png"
+            tone="compact"
+          />
           <div className="guest-gate-card__actions">
             <Link href="/login">
               <Button type="primary" size="large">选择身份登录</Button>
@@ -124,6 +131,12 @@ export default function WatchlistPage() {
       <div className="page-container">
         <Title level={3}>{currentUser?.avatar ?? "⭐"} {userName}的自选</Title>
         <Card style={{ textAlign: "center", padding: "60px 20px" }}>
+          <MarketingVisual
+            alt="自选股票和基金组合界面展示"
+            className="guest-gate-card__media"
+            src="/marketing/hero-stocks.png"
+            tone="compact"
+          />
           <Empty
             description={
               <span style={{ fontSize: 16 }}>
