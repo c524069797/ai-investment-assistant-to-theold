@@ -132,9 +132,11 @@ export default function ExpertsPage() {
 
   const { data, isLoading, error, mutate } = useSWR(query, fetcher, {
     refreshInterval: 60000,
+    dedupingInterval: 30000,
+    keepPreviousData: true,
   });
 
-  const articles = data?.articles ?? [];
+  const articles = useMemo(() => data?.articles ?? [], [data?.articles]);
 
   const columns = useMemo(
     () => [
@@ -336,7 +338,8 @@ export default function ExpertsPage() {
               pageSizeOptions: ["10", "15", "30", "50"],
               showTotal: (total) => `共 ${total} 篇文章`,
             }}
-            scroll={{ x: 900 }}
+            scroll={{ x: 900, y: 620 }}
+            virtual
             className="experts-table"
             size="middle"
             title={() => (

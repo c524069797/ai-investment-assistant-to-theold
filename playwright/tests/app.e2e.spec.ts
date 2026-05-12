@@ -2,17 +2,45 @@ import { expect, test } from "@playwright/test";
 import { mockAppApi } from "./support/mock-app";
 
 test.describe("ai-investment-assistant web flows", () => {
+  test("首次访问无登录记录时进入游客模式", async ({ page, context }) => {
+    await mockAppApi(context, { startLoggedIn: false, initialWatchlist: [] });
+
+    await page.goto("/");
+
+    await expect(page).toHaveURL("/");
+    await expect(page.getByText("游客模式")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "今天先看什么？" })).toBeVisible();
+    await expect(page.getByText("登录后接收全球隔夜市场分析").first()).toBeVisible();
+
+    await page.goto("/chat");
+    await expect(page.getByText("游客模式可浏览，登录后开启 AI 对话")).toBeVisible();
+    await expect(page.getByRole("link", { name: "选择身份登录" })).toBeVisible();
+  });
+
   test("用户登录后进入首页", async ({ page, context }) => {
     await mockAppApi(context, { startLoggedIn: false, initialWatchlist: [] });
 
     await page.goto("/login");
     await page.getByText("爸爸", { exact: true }).click();
-    await page.getByPlaceholder("请输入密码").fill("123456");
-    await page.getByRole("button", { name: /登\s*录/ }).click();
 
     await page.waitForURL("/");
-    await expect(page.getByText("爸爸的a股智能投资助手")).toBeVisible();
-    await expect(page.getByText("A股实时指数")).toBeVisible();
+    await expect(page.getByText("👨 爸爸")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "今天先看什么？" })).toBeVisible();
+    await expect(page.getByText("全球隔夜市场与财经新闻分析").first()).toBeVisible();
+    await expect(page.getByText("晨报协调 Agent").first()).toBeVisible();
+  });
+
+  test("登录后可退出并回到游客浏览状态", async ({ page, context }) => {
+    await mockAppApi(context, { startLoggedIn: true, initialWatchlist: [] });
+
+    await page.goto("/");
+    await expect(page.getByText("👨 爸爸")).toBeVisible();
+
+    await page.getByRole("button", { name: "退出" }).click();
+    await page.waitForURL("/?mode=guest");
+
+    await expect(page.getByText("游客模式")).toBeVisible();
+    await expect(page.getByRole("button", { name: "登录" })).toBeVisible();
   });
 
   test("股票搜索后可打开详情并加入自选", async ({ page, context }) => {
@@ -24,15 +52,13 @@ test.describe("ai-investment-assistant web flows", () => {
 
     await expect(page.getByText("搜索结果：贵州茅台")).toBeVisible();
 
-    const popupPromise = page.waitForEvent("popup");
-    await page.locator('a[href="/stocks/600519?market=1"]').first().click();
-    const popup = await popupPromise;
+    await page.locator(".ant-card").filter({ hasText: "贵州茅台" }).filter({ hasText: "加入自选" }).last().click({ position: { x: 24, y: 24 } });
 
-    await popup.waitForLoadState("domcontentloaded");
-    await expect(popup.getByRole("heading", { name: "贵州茅台" })).toBeVisible();
-    await popup.getByRole("button", { name: "加自选" }).click();
+    await page.waitForURL(/\/stocks\/600519\?market=1$/);
+    await expect(page.getByRole("heading", { name: "贵州茅台" })).toBeVisible();
+    await page.getByRole("button", { name: "加自选" }).click();
 
-    await expect(popup.getByRole("button", { name: "已自选" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "已自选" })).toBeVisible();
   });
 
   test("基金搜索后可进入详情页查看关键信息", async ({ page, context }) => {
@@ -43,7 +69,7 @@ test.describe("ai-investment-assistant web flows", () => {
     await page.keyboard.press("Enter");
 
     await expect(page.getByText("搜索结果：白酒基金")).toBeVisible();
-    await page.locator('a[href="/funds/161725"]').first().click();
+    await page.locator(".ant-card").filter({ hasText: "招商中证白酒指数" }).filter({ hasText: "加入自选" }).last().click({ position: { x: 24, y: 24 } });
 
     await page.waitForURL(/\/funds\/161725$/);
     await expect(page.getByRole("heading", { name: "招商中证白酒指数" })).toBeVisible();
@@ -59,10 +85,10 @@ test.describe("ai-investment-assistant web flows", () => {
     });
 
     await page.goto("/chat");
-    await expect(page.getByText("历史对话", { exact: true })).toBeVisible();
-    await page.getByPlaceholder("请输入您的问题...").fill("帮我看看贵州茅台现在怎么样？");
+    await expect(page.getByText("对话记录", { exact: true })).toBeVisible();
+    await page.getByPlaceholder("输入问题、股票代码，或者想看的老师观点...").fill("帮我看看贵州茅台现在怎么样？");
     await page.getByRole("button", { name: "发送" }).click();
 
-    await expect(page.getByText("根据当前模拟数据，贵州茅台技术面偏多，但仍要注意仓位控制与风险提示。")).toBeVisible();
+    await expect(page.getByText("根据当前模拟数据，贵州茅台技术面偏多，但仍要注意仓位控制与风险提示。").last()).toBeVisible();
   });
 });

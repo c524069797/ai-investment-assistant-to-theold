@@ -97,6 +97,28 @@ export default function WatchlistPage() {
     );
   }
 
+  if (!currentUser) {
+    return (
+      <div className="page-container">
+        <Card className="guest-gate-card">
+          <div className="guest-gate-card__icon">⭐</div>
+          <Title level={3} style={{ marginBottom: 8 }}>登录后使用自选与跟踪提醒</Title>
+          <Paragraph className="guest-gate-card__desc">
+            游客模式可以浏览行情和课程；选择身份后，可以保存股票/基金自选、查看自选分析，并让 AI 记住你的关注逻辑。
+          </Paragraph>
+          <div className="guest-gate-card__actions">
+            <Link href="/login">
+              <Button type="primary" size="large">选择身份登录</Button>
+            </Link>
+            <Link href="/stocks">
+              <Button size="large">先浏览股票</Button>
+            </Link>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   if (!items.length) {
     return (
       <div className="page-container">

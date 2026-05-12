@@ -565,14 +565,19 @@ export default function ChatWindow() {
   }, [isMobile]);
 
   useEffect(() => {
+    document.documentElement.classList.add("chat-page-root-active");
     document.body.classList.add("chat-page-active");
     if (isMobile) {
+      document.documentElement.classList.add("chat-page-root-mobile");
       document.body.classList.add("chat-page-mobile");
     } else {
+      document.documentElement.classList.remove("chat-page-root-mobile");
       document.body.classList.remove("chat-page-mobile");
     }
 
     return () => {
+      document.documentElement.classList.remove("chat-page-root-active");
+      document.documentElement.classList.remove("chat-page-root-mobile");
       document.body.classList.remove("chat-page-active");
       document.body.classList.remove("chat-page-mobile");
     };
@@ -598,6 +603,24 @@ export default function ChatWindow() {
 
   if (userLoading) {
     return <div style={{ textAlign: "center", padding: 80 }}><Spin /></div>;
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="page-container">
+        <Card className="guest-gate-card">
+          <div className="guest-gate-card__icon">🤖</div>
+          <Title level={3} style={{ marginBottom: 8 }}>游客模式可浏览，登录后开启 AI 对话</Title>
+          <Typography.Paragraph className="guest-gate-card__desc">
+            为了保存历史会话、自选股上下文和长期记忆，AI 问答需要先选择一个身份。你仍然可以继续浏览行情、股票、基金、大V观点和投资学堂。
+          </Typography.Paragraph>
+          <div className="guest-gate-card__actions">
+            <Button type="primary" href="/login" size="large">选择身份登录</Button>
+            <Button href="/stocks" size="large">先看股票行情</Button>
+          </div>
+        </Card>
+      </div>
+    );
   }
 
   const historyContent = (

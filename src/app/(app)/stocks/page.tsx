@@ -55,7 +55,7 @@ export default function StocksPage() {
 
   return (
     <div className="page-container">
-      <Card className="dashboard-hero" style={{ marginBottom: 16 }}>
+      <Card className="dashboard-hero stocks-hero" style={{ marginBottom: 16 }}>
         <Text className="hero-eyebrow">A股 · 实时行情中心</Text>
         <Title level={2} className="hero-title">股票查询与筛选</Title>
         <Paragraph className="hero-subtitle">

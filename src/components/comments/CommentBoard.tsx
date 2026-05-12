@@ -10,11 +10,15 @@ type Props = {
   lang?: string;
 };
 
+type WalineInstance = {
+  destroy?: () => void;
+};
+
 export default function CommentBoard({ serverURL, lang = "zh-CN" }: Props) {
   const elRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    let instance: any;
+    let instance: WalineInstance | null | undefined;
     let mounted = true;
 
     import("@waline/client").then(({ init }) => {

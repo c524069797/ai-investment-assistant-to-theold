@@ -23,6 +23,28 @@ export default function MemoryPage() {
     );
   }
 
+  if (!currentUser) {
+    return (
+      <div className="page-container">
+        <Card className="guest-gate-card">
+          <div className="guest-gate-card__icon">🧠</div>
+          <Title level={3} style={{ marginBottom: 8 }}>登录后启用 MemBrain 记忆</Title>
+          <Paragraph className="guest-gate-card__desc">
+            记忆中心会保存你的投资画像、自选股关注逻辑和聊天分析快照。游客模式不会写入个人数据，适合先浏览功能。
+          </Paragraph>
+          <div className="guest-gate-card__actions">
+            <Link href="/login">
+              <Button type="primary" size="large">选择身份登录</Button>
+            </Link>
+            <Link href="/education">
+              <Button size="large">先看投资学堂</Button>
+            </Link>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="page-container">
       <Space direction="vertical" size={4} style={{ marginBottom: 16 }}>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Card, Empty, Spin, Tag, Typography, message } from "antd";
 import { ArrowRightOutlined, PlusOutlined, StockOutlined } from "@ant-design/icons";
 import Link from "next/link";
+import { cacheCurrentUser } from "@/lib/hooks/useUser";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -81,6 +82,7 @@ export default function LoginPage() {
       const json = await res.json();
 
       if (json.success) {
+        cacheCurrentUser(json.data);
         message.success(`欢迎回来，${json.data.name}！`);
         setRedirecting(true);
         window.location.href = "/";
@@ -93,6 +95,12 @@ export default function LoginPage() {
     } finally {
       setLoadingUser("");
     }
+  };
+
+  const enterGuestMode = () => {
+    cacheCurrentUser(null);
+    message.info("已进入游客模式，可浏览行情、观点和课程；登录后可保存自选与对话记录。");
+    window.location.href = "/?mode=guest";
   };
 
   return (
@@ -125,6 +133,21 @@ export default function LoginPage() {
           <Text className="auth-card__section-title">选择身份</Text>
           <Text className="auth-card__section-meta">{accountCountLabel}</Text>
         </div>
+
+        <button
+          type="button"
+          className="auth-account-option auth-account-option--guest"
+          onClick={enterGuestMode}
+          disabled={!!loadingUser || redirecting}
+        >
+          <div className="auth-account-option__avatar">👀</div>
+          <div className="auth-account-option__name">游客模式</div>
+          <div className="auth-account-option__username">无需登录，先浏览行情、观点和课程</div>
+          <div className="auth-account-option__action">
+            <span>直接体验</span>
+            <ArrowRightOutlined />
+          </div>
+        </button>
 
         {loadingAccounts ? (
           <div className="auth-loading-state">

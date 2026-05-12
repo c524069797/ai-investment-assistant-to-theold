@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 // Next.js 16 开始推荐使用 proxy.ts 替代旧的 middleware.ts 命名。
-// 这里做的是“入口级鉴权”，在请求真正落到页面前先检查 session cookie。
+// 页面允许游客浏览；需要用户数据的 API 仍在各自 Route Handler 中校验 session。
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -14,11 +14,6 @@ export function proxy(request: NextRequest) {
     pathname.startsWith("/favicon")
   ) {
     return NextResponse.next();
-  }
-
-  const session = request.cookies.get("session")?.value;
-  if (!session) {
-    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   return NextResponse.next();

@@ -14,6 +14,8 @@ import {
   FundOutlined,
   MenuOutlined,
   CloseOutlined,
+  LoginOutlined,
+  LogoutOutlined,
 } from "@ant-design/icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -38,7 +40,7 @@ export default function AppHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { increase, decrease } = useFontSize();
   const { mode, toggleMode } = useThemeMode();
-  const { currentUser, isLoading } = useUser();
+  const { currentUser, isLoading, logout } = useUser();
   const isDark = mode === "tech-dark";
   const hideOnAuthPage = pathname === "/login" || pathname === "/register";
 
@@ -89,15 +91,34 @@ export default function AppHeader() {
 
           <div className="app-header-right">
             <Space size={8} className="app-header-actions app-header-tools">
-              {isLoading ? (
+              {currentUser ? (
+                <>
+                  <span className="app-header-user">
+                    {currentUser.avatar} {currentUser.name}
+                  </span>
+                  <Button
+                    size="small"
+                    icon={<LogoutOutlined />}
+                    onClick={logout}
+                    className="app-header-action-btn"
+                  >
+                    <span className="app-header-action-label">退出</span>
+                  </Button>
+                </>
+              ) : isLoading ? (
                 <span className="app-header-user" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                   <Spin size="small" /> 正在加载用户...
                 </span>
-              ) : currentUser ? (
-                <span className="app-header-user">
-                  {currentUser.avatar} {currentUser.name}
-                </span>
-              ) : null}
+              ) : (
+                <>
+                  <span className="app-header-user app-header-user--guest">游客模式</span>
+                  <Link href="/login">
+                    <Button size="small" type="primary" icon={<LoginOutlined />} className="app-header-action-btn">
+                      <span className="app-header-action-label">登录</span>
+                    </Button>
+                  </Link>
+                </>
+              )}
               <Tooltip title={isDark ? "切换到科技浅色主题" : "切换到科技深色主题"}>
                 <Button
                   size="small"

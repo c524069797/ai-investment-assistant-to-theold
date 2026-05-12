@@ -1,8 +1,13 @@
 "use client";
 
 import { Suspense } from "react";
+import dynamic from "next/dynamic";
 import { Spin } from "antd";
-import ChatWindow from "@/components/chat/ChatWindow";
+
+const ChatWindow = dynamic(() => import("@/components/chat/ChatWindow"), {
+  ssr: false,
+  loading: () => <div style={{ textAlign: "center", padding: 80 }}><Spin /></div>,
+});
 
 export default function ChatPage() {
   return (

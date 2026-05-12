@@ -14,47 +14,147 @@ export interface User {
   avatar: string;
 }
 
+const USER_CACHE_KEY = "ai-investment-assistant-current-user";
+const BRIEFING_SESSION_PREFIX = "ai-investment-assistant-daily-briefing";
+
+function isUser(value: unknown): value is User {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return ["id", "username", "name", "avatar"].every((key) => typeof record[key] === "string");
+}
+
+function readCachedUser(): User | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(USER_CACHE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    return isUser(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function cacheCurrentUser(user: User | null) {
+  if (typeof window === "undefined") return;
+
+  if (!user) {
+    window.localStorage.removeItem(USER_CACHE_KEY);
+    return;
+  }
+
+  window.localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
+}
+
+function clearBriefingSessionFlags(userId?: string) {
+  if (typeof window === "undefined") return;
+
+  for (let index = window.sessionStorage.length - 1; index >= 0; index -= 1) {
+    const key = window.sessionStorage.key(index);
+    if (!key?.startsWith(BRIEFING_SESSION_PREFIX)) continue;
+    if (userId && !key.includes(`:${userId}:`)) continue;
+    window.sessionStorage.removeItem(key);
+  }
+}
+
 interface UserContextValue {
   currentUser: User | null;
   isLoading: boolean;
+  isGuest: boolean;
   logout: () => Promise<void>;
 }
 
 const UserContext = createContext<UserContextValue>({
   currentUser: null,
   isLoading: true,
+  isGuest: true,
   logout: async () => {},
 });
 
 export function UserProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => readCachedUser());
+  const [isLoading, setIsLoading] = useState(() => Boolean(readCachedUser()));
   const router = useRouter();
 
   useEffect(() => {
-    // 只在客户端挂载时请求一次当前用户信息。
-    fetch("/api/auth/me")
+    const controller = new AbortController();
+    let active = true;
+
+    // 无缓存时先以游客态渲染，再后台确认；有缓存时先显示缓存身份，再校验 session 是否仍有效。
+    fetch("/api/auth/me", { signal: controller.signal })
+      .then((res) => res.json())
+      .then((json) => {
+        if (!active) return;
+
+        if (json.success && isUser(json.data)) {
+          setCurrentUser(json.data);
+          cacheCurrentUser(json.data);
+          return;
+        }
+
+        setCurrentUser(null);
+        cacheCurrentUser(null);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const sessionKey = `${BRIEFING_SESSION_PREFIX}:${currentUser.id}:${today}`;
+
+    if (window.sessionStorage.getItem(sessionKey)) {
+      return;
+    }
+
+    window.sessionStorage.setItem(sessionKey, "pending");
+
+    fetch("/api/agents/daily-briefing", { method: "POST" })
       .then((res) => res.json())
       .then((json) => {
         if (json.success) {
-          setCurrentUser(json.data);
+          window.sessionStorage.setItem(sessionKey, "completed");
+          window.dispatchEvent(new CustomEvent("daily-briefing-ready", { detail: json.data }));
+          return;
         }
+
+        window.sessionStorage.removeItem(sessionKey);
       })
-      .catch(() => {})
-      .finally(() => setIsLoading(false));
-  }, []);
+      .catch(() => {
+        window.sessionStorage.removeItem(sessionKey);
+      });
+  }, [currentUser]);
 
   const logout = useCallback(async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    setCurrentUser(null);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      clearBriefingSessionFlags(currentUser?.id);
+      setCurrentUser(null);
+      cacheCurrentUser(null);
+      window.dispatchEvent(new Event("user-switched"));
+    }
 
-    // App Router 的客户端跳转：先 push，再 refresh，确保依赖用户态的数据一起刷新。
-    router.push("/login");
+    // 退出后保留浏览能力，回到游客首页而不是强制卡在登录页。
+    router.push("/?mode=guest");
     router.refresh();
-  }, [router]);
+  }, [currentUser?.id, router]);
 
   return (
-    <UserContext.Provider value={{ currentUser, isLoading, logout }}>
+    <UserContext.Provider value={{ currentUser, isLoading, isGuest: !isLoading && !currentUser, logout }}>
       {children}
     </UserContext.Provider>
   );

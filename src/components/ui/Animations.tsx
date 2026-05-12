@@ -1,7 +1,7 @@
 "use client";
 
-import { motion, type Variants } from "framer-motion";
-import { type ReactNode } from "react";
+import { motion, type Transition, type Variants } from "framer-motion";
+import { type CSSProperties, type ReactNode } from "react";
 
 // 基础动画变体
 const fadeInUp: Variants = {
@@ -42,7 +42,7 @@ const staggerContainer: Variants = {
 };
 
 // 默认过渡配置
-const defaultTransition = {
+const defaultTransition: Transition = {
   duration: 0.4,
   ease: [0.25, 1, 0.5, 1], // ease-out-quart
 };
@@ -51,6 +51,7 @@ const defaultTransition = {
 interface MotionProps {
   children: ReactNode;
   className?: string;
+  style?: CSSProperties;
   delay?: number;
   duration?: number;
   once?: boolean;
@@ -59,10 +60,11 @@ interface MotionProps {
 /**
  * 入场动画：淡入上移
  */
-export function FadeInUp({ children, className, delay = 0, duration = 0.4, once = true }: MotionProps) {
+export function FadeInUp({ children, className, style, delay = 0, duration = 0.4, once = true }: MotionProps) {
   return (
     <motion.div
       className={className}
+      style={style}
       initial="hidden"
       whileInView="visible"
       viewport={{ once, margin: "-50px" }}
@@ -77,10 +79,11 @@ export function FadeInUp({ children, className, delay = 0, duration = 0.4, once 
 /**
  * 入场动画：淡入
  */
-export function FadeIn({ children, className, delay = 0, duration = 0.4, once = true }: MotionProps) {
+export function FadeIn({ children, className, style, delay = 0, duration = 0.4, once = true }: MotionProps) {
   return (
     <motion.div
       className={className}
+      style={style}
       initial="hidden"
       whileInView="visible"
       viewport={{ once, margin: "-50px" }}
@@ -95,10 +98,11 @@ export function FadeIn({ children, className, delay = 0, duration = 0.4, once = 
 /**
  * 入场动画：缩放淡入
  */
-export function ScaleIn({ children, className, delay = 0, duration = 0.4, once = true }: MotionProps) {
+export function ScaleIn({ children, className, style, delay = 0, duration = 0.4, once = true }: MotionProps) {
   return (
     <motion.div
       className={className}
+      style={style}
       initial="hidden"
       whileInView="visible"
       viewport={{ once, margin: "-50px" }}
@@ -113,10 +117,11 @@ export function ScaleIn({ children, className, delay = 0, duration = 0.4, once =
 /**
  * 入场动画：从左滑入
  */
-export function SlideInLeft({ children, className, delay = 0, duration = 0.4, once = true }: MotionProps) {
+export function SlideInLeft({ children, className, style, delay = 0, duration = 0.4, once = true }: MotionProps) {
   return (
     <motion.div
       className={className}
+      style={style}
       initial="hidden"
       whileInView="visible"
       viewport={{ once, margin: "-50px" }}
@@ -131,10 +136,11 @@ export function SlideInLeft({ children, className, delay = 0, duration = 0.4, on
 /**
  * 入场动画：从右滑入
  */
-export function SlideInRight({ children, className, delay = 0, duration = 0.4, once = true }: MotionProps) {
+export function SlideInRight({ children, className, style, delay = 0, duration = 0.4, once = true }: MotionProps) {
   return (
     <motion.div
       className={className}
+      style={style}
       initial="hidden"
       whileInView="visible"
       viewport={{ once, margin: "-50px" }}
@@ -149,10 +155,11 @@ export function SlideInRight({ children, className, delay = 0, duration = 0.4, o
 /**
  * 容器组件：子元素依次入场
  */
-export function StaggerContainer({ children, className, delay = 0, once = true }: MotionProps) {
+export function StaggerContainer({ children, className, style, delay = 0, once = true }: MotionProps) {
   return (
     <motion.div
       className={className}
+      style={style}
       initial="hidden"
       whileInView="visible"
       viewport={{ once, margin: "-50px" }}

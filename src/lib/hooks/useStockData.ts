@@ -33,7 +33,7 @@ export function useStockQuote(market: number, code: string) {
     // SWR 里 key 为 null 代表“本次不发请求”，这是很常见的条件请求模式。
     code ? `/api/stocks?action=quote&market=${market}&code=${code}` : null,
     fetcher,
-    { refreshInterval: 30000 },
+    { refreshInterval: 30000, dedupingInterval: 10000, keepPreviousData: true },
   );
 }
 
@@ -58,14 +58,16 @@ export function useStockKLine(
       ? `/api/stocks?action=kline&market=${market}&code=${code}&period=${period}&count=${count}`
       : null,
     fetcher,
-    { refreshInterval: 60000 },
+    { refreshInterval: 60000, dedupingInterval: 30000, keepPreviousData: true },
   );
 }
 
 /** 大盘指数 */
 export function useMarketIndices() {
   return useSWR<MarketIndex[]>("/api/stocks?action=indices", fetcher, {
-    refreshInterval: 15000,
+    refreshInterval: 30000,
+    dedupingInterval: 10000,
+    keepPreviousData: true,
   });
 }
 

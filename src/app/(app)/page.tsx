@@ -16,7 +16,7 @@ import {
 import { Button, Card, Empty, Skeleton, Typography } from "antd";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { useMarketIndices } from "@/lib/hooks/useStockData";
 import { useUser } from "@/lib/hooks/useUser";
@@ -24,6 +24,7 @@ import { useWatchlist } from "@/lib/hooks/useWatchlist";
 import { formatPercent, formatPrice, getPriceColor } from "@/styles/stock-colors";
 import type { MarketIndex } from "@/types/stock";
 import { FadeInUp, StaggerContainer, StaggerItem } from "@/components/ui/Animations";
+import DailyBriefingCard from "@/components/dashboard/DailyBriefingCard";
 
 const { Text } = Typography;
 
@@ -375,8 +376,6 @@ function DashboardHero({
             </div>
             <div className="modern-dashboard-stage__signal-list">
               {spotlightIndices.map((item, index) => {
-                const color = getPriceColor(item.changePercent);
-
                 return (
                   <motion.div
                     key={item.code}
@@ -387,7 +386,10 @@ function DashboardHero({
                     <Link href={buildPromptChatLink(`${item.name}分析`, buildIndexPrompt(item))} className="modern-dashboard-stage__signal-card">
                       <span className="modern-dashboard-stage__signal-name">{item.name}</span>
                       <strong className="modern-dashboard-stage__signal-price">{formatPrice(item.price)}</strong>
-                      <span className="modern-dashboard-stage__signal-change" style={{ color }}>{formatPercent(item.changePercent)}</span>
+                      <span className="modern-dashboard-stage__signal-change" data-trend={item.changePercent > 0 ? "up" : item.changePercent < 0 ? "down" : "flat"}>
+                        {item.changePercent > 0 ? "▲ " : item.changePercent < 0 ? "▼ " : ""}
+                        {formatPercent(item.changePercent)}
+                      </span>
                       <span className="modern-dashboard-stage__signal-note">{getIndexComment(item)}</span>
                     </Link>
                   </motion.div>
@@ -672,13 +674,22 @@ function HotspotFlowPanel({ items, loading }: { items: AggressiveScanResult[]; l
 }
 
 function useWatchlistSummary(items: WatchlistItem[]) {
-  const stockItems = items.filter((item) => item.type === "stock").slice(0, 4);
-  const key = stockItems.length
-    ? `/api/stocks?action=watchlist-summary&items=${encodeURIComponent(JSON.stringify(stockItems.map((item) => ({ code: item.code, name: item.name, market: item.market }))))}`
-    : null;
+  const stockItems = useMemo(
+    () => items.filter((item) => item.type === "stock").slice(0, 4),
+    [items],
+  );
+  const key = useMemo(
+    () =>
+      stockItems.length
+        ? `/api/stocks?action=watchlist-summary&items=${encodeURIComponent(JSON.stringify(stockItems.map((item) => ({ code: item.code, name: item.name, market: item.market }))))}`
+        : null,
+    [stockItems],
+  );
 
   const { data, isLoading } = useSWR<Array<{ code: string; name: string; market: number; price: number; changePercent: number }>>(key, fetcher, {
     refreshInterval: 60000,
+    dedupingInterval: 30000,
+    keepPreviousData: true,
   });
 
   return {
@@ -687,11 +698,15 @@ function useWatchlistSummary(items: WatchlistItem[]) {
   };
 }
 
-function useHotspotScan() {
+function useHotspotScan(enabled: boolean) {
   const { data, isLoading } = useSWR<AggressiveScanResult[]>(
-    "/api/stocks?action=strategy-scan&mode=aggressive&count=6",
+    enabled ? "/api/stocks?action=strategy-scan&mode=aggressive&count=6" : null,
     fetcher,
-    { refreshInterval: 60000 },
+    {
+      refreshInterval: 60000,
+      dedupingInterval: 30000,
+      keepPreviousData: true,
+    },
   );
 
   return {
@@ -700,48 +715,66 @@ function useHotspotScan() {
   };
 }
 
+function useDeferredHomeData() {
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setEnabled(true), 800);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  return enabled;
+}
+
 export default function HomePage() {
   const { data: indices, isLoading: indicesLoading } = useMarketIndices();
   const { items: watchlist } = useWatchlist();
   useUser();
   const { data: watchlistSummary, isLoading: watchlistLoading } = useWatchlistSummary(watchlist);
-  const { data: hotspotScan, isLoading: hotspotLoading } = useHotspotScan();
+  const loadSecondaryData = useDeferredHomeData();
+  const { data: hotspotScan, isLoading: hotspotLoading } = useHotspotScan(loadSecondaryData);
 
   const coreIndices = useMemo(() => pickIndices(indices, ["000001", "399001", "399006"], 3), [indices]);
   const desktopIndices = useMemo(() => pickIndices(indices, ["000001", "399001", "399006", "000300", "000016", "000688"], 6), [indices]);
-  const stockWatchlistCount = watchlist.filter((item) => item.type === "stock").length;
-  const sentiment = getSentiment(coreIndices);
-  const summary = buildTodaySummary(sentiment);
-  const strongestWatchlist = getStrongestItem(watchlistSummary);
+  const stockWatchlistCount = useMemo(() => watchlist.filter((item) => item.type === "stock").length, [watchlist]);
+  const sentiment = useMemo(() => getSentiment(coreIndices), [coreIndices]);
+  const summary = useMemo(() => buildTodaySummary(sentiment), [sentiment]);
+  const strongestWatchlist = useMemo(() => getStrongestItem(watchlistSummary), [watchlistSummary]);
 
   return (
     <div className="page-container modern-dashboard-page">
       <section className="modern-dashboard-desktop">
-        <DashboardHero
-          summary={summary}
-          sentiment={sentiment}
-          indices={desktopIndices}
-          watchlistCount={stockWatchlistCount}
-          strongestWatchlist={strongestWatchlist}
-        />
+        <div className="modern-dashboard-first-screen">
+          <DashboardHero
+            summary={summary}
+            sentiment={sentiment}
+            indices={desktopIndices}
+            watchlistCount={stockWatchlistCount}
+            strongestWatchlist={strongestWatchlist}
+          />
 
-        <StaggerContainer className="modern-dashboard-desktop-grid">
-          <StaggerItem className="modern-dashboard-desktop-span-5">
-            <AskAIPanel />
-          </StaggerItem>
-          <StaggerItem className="modern-dashboard-desktop-span-3">
-            <SentimentPanel sentiment={sentiment} />
-          </StaggerItem>
-          <StaggerItem className="modern-dashboard-desktop-span-4">
-            <MarketPulsePanel sentiment={sentiment} indices={desktopIndices} watchlist={watchlistSummary} />
-          </StaggerItem>
-          <StaggerItem className="modern-dashboard-desktop-span-7">
-            <WatchlistPanel items={watchlistSummary} loading={watchlistLoading} />
-          </StaggerItem>
-          <StaggerItem className="modern-dashboard-desktop-span-5">
-            <StrategyPanel sentiment={sentiment} watchlist={watchlistSummary} />
-          </StaggerItem>
-        </StaggerContainer>
+          <StaggerContainer className="modern-dashboard-desktop-grid">
+            <StaggerItem className="modern-dashboard-desktop-span-5">
+              <AskAIPanel />
+            </StaggerItem>
+            <StaggerItem className="modern-dashboard-desktop-span-3">
+              <SentimentPanel sentiment={sentiment} />
+            </StaggerItem>
+            <StaggerItem className="modern-dashboard-desktop-span-4">
+              <MarketPulsePanel sentiment={sentiment} indices={desktopIndices} watchlist={watchlistSummary} />
+            </StaggerItem>
+            <StaggerItem className="modern-dashboard-desktop-span-7">
+              <WatchlistPanel items={watchlistSummary} loading={watchlistLoading} />
+            </StaggerItem>
+            <StaggerItem className="modern-dashboard-desktop-span-5">
+              <StrategyPanel sentiment={sentiment} watchlist={watchlistSummary} />
+            </StaggerItem>
+          </StaggerContainer>
+        </div>
+
+        <FadeInUp delay={0.25}>
+          <DailyBriefingCard />
+        </FadeInUp>
 
         <FadeInUp delay={0.3}>
           <HotspotFlowPanel items={hotspotScan} loading={hotspotLoading} />
@@ -754,6 +787,10 @@ export default function HomePage() {
       <section className="modern-dashboard-mobile mobile-reference-dashboard">
         <FadeInUp>
           <DashboardTitle summary={summary} />
+        </FadeInUp>
+
+        <FadeInUp delay={0.1}>
+          <DailyBriefingCard />
         </FadeInUp>
 
         <StaggerContainer className="mobile-reference-grid mobile-reference-grid--cards" style={{ marginBottom: 12 }}>

@@ -61,7 +61,7 @@ export default function NavigationAgent() {
         placement="right"
         open={open}
         onClose={() => setOpen(false)}
-        width={380}
+        size={380}
         className="navigation-agent-drawer"
       >
         <div className="navigation-agent-drawer__body">

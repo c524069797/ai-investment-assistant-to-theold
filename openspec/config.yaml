@@ -1,0 +1,29 @@
+schema: spec-driven
+
+context: |
+  Tech stack: Next.js 16 (App Router), TypeScript, Ant Design 6, ECharts, SWR.
+  Backend: Next.js API routes as server-side proxies (Eastmoney, Tiantianfund), Mastra AI via @ai-sdk (OpenAI compatible).
+  Data: Prisma + PostgreSQL (Accelerate), zod for validation.
+  UX: Chinese-first, accessibility focused (larger fonts, high contrast, mobile).
+  Conventions: Red-up/green-down colors; SWR refresh 15–60s; localStorage-backed watchlist; App Router pages under src/app.
+
+rules:
+  proposal:
+    - Call external data sources via server API routes only (no direct browser calls).
+    - Include risk disclosures for investment advice and avoid deterministic recommendations.
+    - Keep accessibility (font sizes, contrast, touch targets) unchanged or improved.
+    - Specify affected tabs/pages and SWR refresh intervals in proposals.
+    - Ensure charts remain performant; avoid heavy blocking work in render; prefer memoization.
+  specs:
+    - Use SHALL/MUST wording
+    - Include Given/When/Then scenarios for behavior
+    - Define loading/empty/error and data freshness expectations
+    - Document rate limits, retries, and fallback paths
+  design:
+    - Provide API shapes, dependencies, and security considerations
+    - List affected components/modules and data flow
+    - Note performance constraints and monitoring hooks
+  tasks:
+    - Break into steps under ~2 hours each
+    - Include testing and docs updates
+    - Update env vars and deployments where applicable

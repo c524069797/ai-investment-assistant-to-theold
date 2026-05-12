@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { Spin, Typography } from "antd";
 
-const ReactECharts = dynamic(() => import("echarts-for-react"), {
+const EChartClient = dynamic(() => import("@/components/charts/EChartClient"), {
   ssr: false,
   loading: () => (
     <div style={{ height: 300, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -27,7 +27,7 @@ export default function LessonChart({ title, option, height = 350 }: LessonChart
         </Typography.Text>
       </div>
       <div style={{ padding: "8px 8px 0" }}>
-        <ReactECharts option={option} style={{ height }} />
+        <EChartClient option={option} style={{ height }} />
       </div>
     </div>
   );

@@ -7,7 +7,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // 这些依赖会同时出现在 Server Components / Client Components 边界附近，
   // 显式交给 Next 转译可以减少 ESM / CJS、样式注入、浏览器端兼容问题。
-  transpilePackages: ["echarts", "echarts-for-react", "antd", "@ant-design/icons"],
+  transpilePackages: ["echarts", "antd", "@ant-design/icons"],
 
   // Mastra 主要运行在 Node 服务端，保留为 external package，避免被打进浏览器 bundle。
   serverExternalPackages: ["@mastra/core"],

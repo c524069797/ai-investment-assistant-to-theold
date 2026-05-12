@@ -24,7 +24,11 @@ export function useWatchlist() {
   const userId = currentUser?.id;
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      setItems([]);
+      setIsLoading(false);
+      return;
+    }
 
     let active = true;
 

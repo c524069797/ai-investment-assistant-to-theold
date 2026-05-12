@@ -134,6 +134,29 @@ const fundDetail = {
   performance3Y: "+18.90%",
 };
 
+const dailyBriefing = {
+  id: "daily-briefing-2026-03-21",
+  targetDate: "2026-03-21",
+  generatedAt: "2026-03-22T08:00:00.000Z",
+  status: "agent_generated",
+  agents: [
+    { id: "global-market-scout", name: "全球市场侦察 Agent", responsibility: "接收隔夜全球主要指数。", status: "completed" },
+    { id: "finance-news-analyst", name: "财经新闻分析 Agent", responsibility: "筛选前一日财经新闻。", status: "completed" },
+    { id: "daily-briefing-coordinator", name: "晨报协调 Agent", responsibility: "生成盘前摘要。", status: "completed" },
+  ],
+  executiveSummary: "隔夜全球市场整体偏中性，科技股表现相对稳健。A股开盘先观察港股、中国资产和AI方向的联动强度。",
+  marketPulse: ["相对强势：纳斯达克 +0.60%", "相对承压：恒生指数 -0.30%", "风险状态：先按中性情景处理"],
+  riskLevel: "medium",
+  watchItems: ["观察美股科技股对A股AI方向的映射。", "观察港股开盘是否改善中国资产风险偏好。", "观察美元与利率预期对成长股估值的影响。"],
+  headlines: [
+    { title: "Global markets steady before Asia open", source: "Mock Finance", url: "", publishedAt: "2026-03-22T07:00:00.000Z" },
+  ],
+  quotes: [
+    { symbol: "^IXIC", name: "纳斯达克", region: "美国", price: 18000, changePercent: 0.6 },
+  ],
+  disclosure: "本晨报由多 Agent 编排生成，仅用于盘前信息整理和风险观察，不构成投资建议。",
+};
+
 function json(route: Route, body: unknown, status = 200) {
   return route.fulfill({
     status,
@@ -187,9 +210,30 @@ export async function mockAppApi(context: BrowserContext, options: MockAppOption
       });
     }
 
+    if (pathname === "/api/auth/logout" && method === "POST") {
+      loggedIn = false;
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json; charset=utf-8",
+        headers: {
+          "Set-Cookie": "session=; Path=/; SameSite=Lax; Max-Age=0",
+        },
+        body: JSON.stringify({ success: true }),
+      });
+    }
+
+    if (pathname === "/api/auth/accounts" && method === "GET") {
+      return json(route, { success: true, data: [mockUser, { id: "mom", username: "mama", name: "妈妈", avatar: "👩" }] });
+    }
+
     if (pathname === "/api/auth/me" && method === "GET") {
-      if (!loggedIn) return json(route, { success: false, error: "未登录" }, 401);
+      if (!loggedIn) return json(route, { success: true, data: null, mode: "guest" });
       return json(route, { success: true, data: mockUser });
+    }
+
+    if (pathname === "/api/agents/daily-briefing") {
+      if (!loggedIn) return json(route, { success: false, error: "未登录" }, 401);
+      return json(route, { success: true, data: dailyBriefing });
     }
 
     if (pathname === "/api/stocks" && method === "GET") {
