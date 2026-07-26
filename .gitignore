@@ -76,3 +76,6 @@ next-env.d.ts
 
 # local docs
 docs/
+
+# 本地调试产物（审计脚本/截图/备份 patch）
+tmp/
