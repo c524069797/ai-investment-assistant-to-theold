@@ -1,6 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { getBigVArticles } from "@/lib/db";
+import { searchBigVKnowledge } from "@/lib/bigv/vector-search";
 
 export const bigVAnalysisTool = createTool({
   id: "bigv-analysis",
@@ -9,7 +9,7 @@ export const bigVAnalysisTool = createTool({
     query: z.string().describe("老师名、文章关键词、板块关键词，例如‘但斌’、‘白酒’、‘科技’"),
   }),
   execute: async ({ query }) => {
-    const articles = await getBigVArticles({ keyword: query, limit: 6 });
+    const articles = await searchBigVKnowledge(query, { limit: 6 });
 
     if (!articles.length) {
       return {
@@ -22,14 +22,15 @@ export const bigVAnalysisTool = createTool({
       found: true,
       query,
       items: articles.map((item) => ({
-        author: item.author.name,
-        authorCategory: item.author.category,
+        author: item.author,
         title: item.title,
         summary: item.summary,
-        category: item.primaryCategory,
+        category: item.category,
         tags: item.tags,
         sentiment: item.sentiment,
         publishedAt: item.publishedAt,
+        sourceUrl: item.sourceUrl,
+        score: item.score,
       })),
     };
   },

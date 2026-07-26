@@ -32,7 +32,18 @@ export default async function ExpertDetailPage({ params }: { params: Promise<{ i
         </Link>
         <ChatHandoffLink
           title={`${article.author.name}观点解读`}
-          prompt={`请结合最近收录的大V观点，重点分析${article.author.name}今天对《${article.title}》的核心看法，并用通俗方式总结给我。`}
+          prompt={`请结合最近收录的大V观点，重点分析 ${article.author.name} 在《${article.title}》中的核心看法，按下面结构输出：
+1. 核心结论：这篇文章到底想表达什么；
+2. 市场态度：偏多、偏空、震荡，还是等待确认；
+3. 重点方向：提到了哪些指数、板块、个股、风格切换；
+4. 节奏判断：作者更强调反弹、回踩、轮动、补跌、观察，还是其他节奏；
+5. 风险提醒：文中明确提醒了哪些风险；
+6. 给普通投资者的翻译：把原文里的交易语言翻译成容易理解的话。
+
+要求：
+- 尽量依据文章原文，不要泛泛而谈；
+- 不要直接给出“买/卖”指令；
+- 用通俗中文，写清楚，不要只给一句话结论。`}
           className="expert-detail-btn expert-detail-btn--primary"
         >
           交给 AI 解读

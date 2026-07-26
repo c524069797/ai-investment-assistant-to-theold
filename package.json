@@ -21,7 +21,8 @@
     "bigv:upload": "node scripts/upload-bigv-articles.mjs",
     "bigv:sync:finance": "node scripts/sync-finance-monitor-bigv.mjs",
     "bigv:sync:telegram": "node scripts/sync-telegram-bigv.mjs",
-    "bigv:sync:telegram:dry": "node scripts/sync-telegram-bigv.mjs --dry-run"
+    "bigv:sync:telegram:dry": "node scripts/sync-telegram-bigv.mjs --dry-run",
+    "bigv:vector:index": "node scripts/build-bigv-vector-index.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.39",
