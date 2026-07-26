@@ -92,7 +92,9 @@ export default function MemoryPage() {
               </Link>
             </Empty>
           ) : (
-            <div style={{ display: "grid", gap: 16 }}>
+            <div style={{ display: "grid", gap: 16, gridTemplateColumns: "minmax(0, 1fr)" }}>
+              {/* minmax(0,1fr)：grid 轨道默认不小于子项 min-content，
+                  卡片里的长 Tag/标题会把整列撑破视口，显式允许收缩。 */}
               {stocks.map((item) => (
                 <StockMemoryCard key={item.code} code={item.code} name={item.name} market={item.market} />
               ))}

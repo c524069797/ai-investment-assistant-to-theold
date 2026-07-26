@@ -28,6 +28,8 @@ import Link from "next/link";
 import { stripMarkdown, truncateText } from "@/lib/markdown";
 import MarketingVisual from "@/components/marketing/MarketingVisual";
 import ChatHandoffLink from "@/components/chat/ChatHandoffLink";
+import ExpertArticleList from "@/components/experts/ExpertArticleList";
+import { useIsMobile } from "@/lib/hooks/useBreakpoint";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -94,7 +96,18 @@ function formatDate(date: string) {
 }
 
 function buildAIPrompt(article: BigVArticle) {
-  return `请用通俗方式解读 ${article.author.name} 在《${article.title}》里的核心判断，并告诉我这篇文章对普通投资者有什么启示。`;
+  return `请你把 ${article.author.name} 在《${article.title}》里的观点拆开讲清楚，要求：
+1. 先用 2-3 句话概括这篇文章最核心的结论；
+2. 明确说明作者现在更偏向看多、看空，还是震荡观察；
+3. 把文中提到的指数、板块、个股、仓位、节奏、风险点分别列出来；
+4. 如果文章里有“时间点、支撑位、压力位、回踩、反弹、止损、低吸、追高”这类交易表达，要单独翻译成普通投资者容易理解的话；
+5. 说明这篇文章更适合哪类读者参考：短线、波段，还是偏观察型用户；
+6. 最后补一个“普通投资者现在最该注意什么”。
+
+回答要求：
+- 不要空泛复述，要尽量贴着原文观点说；
+- 不要直接给买卖指令；
+- 用简洁中文，结构清楚，适合非专业用户阅读。`;
 }
 
 export default function ExpertsPage() {
@@ -299,6 +312,51 @@ export default function ExpertsPage() {
     return [...map.values()];
   }, [articles]);
 
+  // <768px 换成卡片流：多列表格在窄屏会撑破视口，横向滚动不适合适老化场景。
+  const isMobile = useIsMobile();
+
+  // 搜索 + 三个筛选器两端共用，只是容器不同（桌面在表格 title 里，移动端独立成块）。
+  const filterToolbar = (
+    <div className="experts-table-toolbar">
+      <div className="experts-table-toolbar__search">
+        <Input.Search
+          key={`${author}-${category}-${tag}-${keyword}`}
+          allowClear
+          defaultValue={keyword}
+          placeholder="搜索老师名、标题或板块"
+          enterButton="搜索"
+          onSearch={(value) => updateParams({ keyword: value.trim() })}
+        />
+      </div>
+      <div className="experts-table-toolbar__filters">
+        <Select
+          allowClear
+          placeholder="按作者"
+          value={author || undefined}
+          onChange={(value) => updateParams({ author: value ?? "" })}
+          options={data?.filters.authors.map((item) => ({
+            value: item.name,
+            label: `${item.avatar ?? "🧠"} ${item.name}`,
+          })) ?? []}
+        />
+        <Select
+          allowClear
+          placeholder="按分类"
+          value={category || undefined}
+          onChange={(value) => updateParams({ category: value ?? "" })}
+          options={data?.filters.categories.map((item) => ({ value: item, label: item })) ?? []}
+        />
+        <Select
+          allowClear
+          placeholder="按标签"
+          value={tag || undefined}
+          onChange={(value) => updateParams({ tag: value ?? "" })}
+          options={data?.filters.tags.map((item) => ({ value: item, label: item })) ?? []}
+        />
+      </div>
+    </div>
+  );
+
   return (
     <div className="page-container experts-page">
       <Card className="dashboard-hero experts-hero" style={{ marginBottom: 16 }}>
@@ -334,62 +392,30 @@ export default function ExpertsPage() {
         </div>
       ) : articles.length ? (
         <Card className="tech-section-card experts-table-card">
-          <Table
-            dataSource={articles}
-            columns={columns}
-            rowKey="id"
-            expandable={expandable}
-            pagination={{
-              pageSize: 15,
-              showSizeChanger: true,
-              pageSizeOptions: ["10", "15", "30", "50"],
-              showTotal: (total) => `共 ${total} 篇文章`,
-            }}
-            scroll={{ x: 900, y: 620 }}
-            virtual
-            className="experts-table"
-            size="middle"
-            title={() => (
-              <div className="experts-table-toolbar">
-                <div className="experts-table-toolbar__search">
-                  <Input.Search
-                    key={`${author}-${category}-${tag}-${keyword}`}
-                    allowClear
-                    defaultValue={keyword}
-                    placeholder="输入老师名、标题关键词或板块关键词"
-                    enterButton="搜索"
-                    onSearch={(value) => updateParams({ keyword: value.trim() })}
-                  />
-                </div>
-                <div className="experts-table-toolbar__filters">
-                  <Select
-                    allowClear
-                    placeholder="按作者"
-                    value={author || undefined}
-                    onChange={(value) => updateParams({ author: value ?? "" })}
-                    options={data?.filters.authors.map((item) => ({
-                      value: item.name,
-                      label: `${item.avatar ?? "🧠"} ${item.name}`,
-                    })) ?? []}
-                  />
-                  <Select
-                    allowClear
-                    placeholder="按分类"
-                    value={category || undefined}
-                    onChange={(value) => updateParams({ category: value ?? "" })}
-                    options={data?.filters.categories.map((item) => ({ value: item, label: item })) ?? []}
-                  />
-                  <Select
-                    allowClear
-                    placeholder="按标签"
-                    value={tag || undefined}
-                    onChange={(value) => updateParams({ tag: value ?? "" })}
-                    options={data?.filters.tags.map((item) => ({ value: item, label: item })) ?? []}
-                  />
-                </div>
-              </div>
-            )}
-          />
+          {filterToolbar}
+          {isMobile ? (
+            <ExpertArticleList
+              articles={articles}
+              buildPrompt={buildAIPrompt}
+              sentimentLabel={sentimentLabel}
+            />
+          ) : (
+            <Table
+              dataSource={articles}
+              columns={columns}
+              rowKey="id"
+              expandable={expandable}
+              pagination={{
+                pageSize: 15,
+                showSizeChanger: true,
+                pageSizeOptions: ["10", "15", "30", "50"],
+                showTotal: (total) => `共 ${total} 篇文章`,
+              }}
+              scroll={{ x: "max-content", y: 620 }}
+              className="experts-table"
+              size="middle"
+            />
+          )}
         </Card>
       ) : (
         <Card className="tech-section-card">

@@ -17,11 +17,13 @@ import {
   LoginOutlined,
   LogoutOutlined,
   ClusterOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useFontSize, useThemeMode } from "./AntdProvider";
 import { useUser } from "@/lib/hooks/useUser";
+import AiSettingsDrawer from "@/components/settings/AiSettingsDrawer";
 
 const { Header } = Layout;
 const { Title } = Typography;
@@ -40,6 +42,7 @@ const NAV_ITEMS = [
 export default function AppHeader() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const { increase, decrease } = useFontSize();
   const { mode, toggleMode } = useThemeMode();
   const { currentUser, isLoading, logout } = useUser();
@@ -92,20 +95,23 @@ export default function AppHeader() {
           </div>
 
           <div className="app-header-right">
-            <Space size={8} className="app-header-actions app-header-tools">
+            {/* 桌面工具区：科技风走紧凑 icon-only，文字说明放 Tooltip。
+                移动端整组隐藏，所有工具收进汉堡菜单（适老化大按钮）。 */}
+            <Space size={6} className="app-header-actions app-header-tools">
               {currentUser ? (
                 <>
                   <span className="app-header-user">
                     {currentUser.avatar} {currentUser.name}
                   </span>
-                  <Button
-                    size="small"
-                    icon={<LogoutOutlined />}
-                    onClick={logout}
-                    className="app-header-action-btn"
-                  >
-                    <span className="app-header-action-label">退出</span>
-                  </Button>
+                  <Tooltip title="退出登录">
+                    <Button
+                      size="small"
+                      icon={<LogoutOutlined />}
+                      onClick={logout}
+                      className="app-header-action-btn"
+                      aria-label="退出登录"
+                    />
+                  </Tooltip>
                 </>
               ) : isLoading ? (
                 <span className="app-header-user" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -116,28 +122,41 @@ export default function AppHeader() {
                   <span className="app-header-user app-header-user--guest">游客模式</span>
                   <Link href="/login">
                     <Button size="small" type="primary" icon={<LoginOutlined />} className="app-header-action-btn">
-                      <span className="app-header-action-label">登录</span>
+                      登录
                     </Button>
                   </Link>
                 </>
               )}
-              <Tooltip title={isDark ? "切换到科技浅色主题" : "切换到科技深色主题"}>
+              <Tooltip title={isDark ? "切换到浅色主题" : "切换到深色主题"}>
                 <Button
                   size="small"
                   icon={isDark ? <BulbOutlined /> : <MoonOutlined />}
                   onClick={toggleMode}
-                  className="app-header-action-btn app-header-theme-btn"
-                >
-                  <span className="app-header-action-label">{isDark ? "浅色" : "深色"}</span>
-                </Button>
+                  className="app-header-action-btn"
+                  aria-label={isDark ? "切换到浅色主题" : "切换到深色主题"}
+                />
               </Tooltip>
-              <Button size="small" onClick={decrease} className="app-header-action-btn app-header-font-btn">
-                A-
-              </Button>
-              <FontSizeOutlined className="app-header-font-icon" style={{ fontSize: 18 }} />
-              <Button size="small" onClick={increase} className="app-header-action-btn app-header-font-btn">
-                A+
-              </Button>
+              <Tooltip title="AI 设置">
+                <Button
+                  size="small"
+                  icon={<SettingOutlined />}
+                  onClick={() => setSettingsOpen(true)}
+                  className="app-header-action-btn"
+                  aria-label="AI 设置"
+                />
+              </Tooltip>
+              <span className="app-header-font-group">
+                <Tooltip title="调小字号">
+                  <Button size="small" onClick={decrease} className="app-header-action-btn app-header-font-btn">
+                    A-
+                  </Button>
+                </Tooltip>
+                <Tooltip title="调大字号">
+                  <Button size="small" onClick={increase} className="app-header-action-btn app-header-font-btn">
+                    A+
+                  </Button>
+                </Tooltip>
+              </span>
             </Space>
 
             <button
@@ -153,6 +172,33 @@ export default function AppHeader() {
 
         {mobileMenuOpen ? (
           <div className="app-header-mobile-menu">
+            {/* 用户状态：登录/退出是低频但重要的入口，放菜单首行 */}
+            <div className="app-header-mobile-user">
+              {currentUser ? (
+                <>
+                  <span className="app-header-mobile-user__name">
+                    {currentUser.avatar} {currentUser.name}
+                  </span>
+                  <Button
+                    icon={<LogoutOutlined />}
+                    onClick={() => {
+                      logout();
+                      setMobileMenuOpen(false);
+                    }}
+                  >
+                    退出登录
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <span className="app-header-mobile-user__name app-header-user--guest">游客模式</span>
+                  <Link href="/login" onClick={() => setMobileMenuOpen(false)}>
+                    <Button type="primary" icon={<LoginOutlined />}>选择身份登录</Button>
+                  </Link>
+                </>
+              )}
+            </div>
+
             <nav className="app-header-mobile-nav">
               {NAV_ITEMS.map((item) => (
                 <Link
@@ -167,9 +213,35 @@ export default function AppHeader() {
                 </Link>
               ))}
             </nav>
+
+            {/* 工具区：主题/设置/字号，适老化 48px 大按钮 */}
+            <div className="app-header-mobile-tools">
+              <Button
+                icon={isDark ? <BulbOutlined /> : <MoonOutlined />}
+                onClick={toggleMode}
+              >
+                {isDark ? "浅色主题" : "深色主题"}
+              </Button>
+              <Button
+                icon={<SettingOutlined />}
+                onClick={() => {
+                  setSettingsOpen(true);
+                  setMobileMenuOpen(false);
+                }}
+              >
+                AI 设置
+              </Button>
+              <Button icon={<FontSizeOutlined />} onClick={decrease}>
+                字体调小
+              </Button>
+              <Button icon={<FontSizeOutlined />} onClick={increase}>
+                字体调大
+              </Button>
+            </div>
           </div>
         ) : null}
       </div>
+      <AiSettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </Header>
   );
 }

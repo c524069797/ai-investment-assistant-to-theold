@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, type Transition, type Variants } from "framer-motion";
+import { motion, useReducedMotion, type Transition, type Variants } from "framer-motion";
 import { type CSSProperties, type ReactNode } from "react";
 
 // 基础动画变体
@@ -58,17 +58,43 @@ interface MotionProps {
 }
 
 /**
- * 入场动画：淡入上移
+ * 入场触发边界：视口底部向外扩 200px，元素还没滚进屏幕动画就开始，
+ * 用户滚到时内容已就位。负值（旧的 -50px）会让用户先看到空白再看到闪现，
+ * 首页"底部大片空白"的体感就是这么来的。
  */
-export function FadeInUp({ children, className, style, delay = 0, duration = 0.4, once = true }: MotionProps) {
+const IN_VIEW_MARGIN = "0px 0px 200px 0px";
+
+/**
+ * 五种入场动画共用的实现。prefers-reduced-motion 时直接渲染普通
+ * div（内容立即可见），既是无障碍要求，也兜底了动画不触发的极端场景。
+ */
+function InViewMotion({
+  children,
+  className,
+  style,
+  delay = 0,
+  duration = 0.4,
+  once = true,
+  variants,
+}: MotionProps & { variants: Variants }) {
+  const reduceMotion = useReducedMotion();
+
+  if (reduceMotion) {
+    return (
+      <div className={className} style={style}>
+        {children}
+      </div>
+    );
+  }
+
   return (
     <motion.div
       className={className}
       style={style}
       initial="hidden"
       whileInView="visible"
-      viewport={{ once, margin: "-50px" }}
-      variants={fadeInUp}
+      viewport={{ once, margin: IN_VIEW_MARGIN }}
+      variants={variants}
       transition={{ ...defaultTransition, duration, delay }}
     >
       {children}
@@ -76,93 +102,52 @@ export function FadeInUp({ children, className, style, delay = 0, duration = 0.4
   );
 }
 
-/**
- * 入场动画：淡入
- */
-export function FadeIn({ children, className, style, delay = 0, duration = 0.4, once = true }: MotionProps) {
-  return (
-    <motion.div
-      className={className}
-      style={style}
-      initial="hidden"
-      whileInView="visible"
-      viewport={{ once, margin: "-50px" }}
-      variants={fadeIn}
-      transition={{ ...defaultTransition, duration, delay }}
-    >
-      {children}
-    </motion.div>
-  );
+/** 入场动画：淡入上移 */
+export function FadeInUp(props: MotionProps) {
+  return <InViewMotion {...props} variants={fadeInUp} />;
 }
 
-/**
- * 入场动画：缩放淡入
- */
-export function ScaleIn({ children, className, style, delay = 0, duration = 0.4, once = true }: MotionProps) {
-  return (
-    <motion.div
-      className={className}
-      style={style}
-      initial="hidden"
-      whileInView="visible"
-      viewport={{ once, margin: "-50px" }}
-      variants={scaleIn}
-      transition={{ ...defaultTransition, duration, delay }}
-    >
-      {children}
-    </motion.div>
-  );
+/** 入场动画：淡入 */
+export function FadeIn(props: MotionProps) {
+  return <InViewMotion {...props} variants={fadeIn} />;
 }
 
-/**
- * 入场动画：从左滑入
- */
-export function SlideInLeft({ children, className, style, delay = 0, duration = 0.4, once = true }: MotionProps) {
-  return (
-    <motion.div
-      className={className}
-      style={style}
-      initial="hidden"
-      whileInView="visible"
-      viewport={{ once, margin: "-50px" }}
-      variants={slideInLeft}
-      transition={{ ...defaultTransition, duration, delay }}
-    >
-      {children}
-    </motion.div>
-  );
+/** 入场动画：缩放淡入 */
+export function ScaleIn(props: MotionProps) {
+  return <InViewMotion {...props} variants={scaleIn} />;
 }
 
-/**
- * 入场动画：从右滑入
- */
-export function SlideInRight({ children, className, style, delay = 0, duration = 0.4, once = true }: MotionProps) {
-  return (
-    <motion.div
-      className={className}
-      style={style}
-      initial="hidden"
-      whileInView="visible"
-      viewport={{ once, margin: "-50px" }}
-      variants={slideInRight}
-      transition={{ ...defaultTransition, duration, delay }}
-    >
-      {children}
-    </motion.div>
-  );
+/** 入场动画：从左滑入 */
+export function SlideInLeft(props: MotionProps) {
+  return <InViewMotion {...props} variants={slideInLeft} />;
+}
+
+/** 入场动画：从右滑入 */
+export function SlideInRight(props: MotionProps) {
+  return <InViewMotion {...props} variants={slideInRight} />;
 }
 
 /**
  * 容器组件：子元素依次入场
  */
 export function StaggerContainer({ children, className, style, delay = 0, once = true }: MotionProps) {
+  const reduceMotion = useReducedMotion();
+
+  if (reduceMotion) {
+    return (
+      <div className={className} style={style}>
+        {children}
+      </div>
+    );
+  }
+
   return (
     <motion.div
       className={className}
       style={style}
       initial="hidden"
       whileInView="visible"
-      viewport={{ once, margin: "-50px" }}
+      viewport={{ once, margin: IN_VIEW_MARGIN }}
       variants={staggerContainer}
       transition={{ delay }}
     >
@@ -175,6 +160,12 @@ export function StaggerContainer({ children, className, style, delay = 0, once =
  * 子元素：用于 StaggerContainer 内部
  */
 export function StaggerItem({ children, className }: { children: ReactNode; className?: string }) {
+  const reduceMotion = useReducedMotion();
+
+  if (reduceMotion) {
+    return <div className={className}>{children}</div>;
+  }
+
   return (
     <motion.div className={className} variants={fadeInUp} transition={defaultTransition}>
       {children}

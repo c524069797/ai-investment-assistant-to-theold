@@ -1,19 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { Typography, Card, Row, Col, Segmented, Space, Input, Button, Spin, Alert, Descriptions, Tag, Empty, Divider } from "antd";
+import { Typography, Card, Segmented, Space, Input, Button, Spin, Alert, Descriptions, Tag, Empty, Divider } from "antd";
 import {
   SafetyCertificateOutlined,
   ThunderboltOutlined,
   SearchOutlined,
   ArrowRightOutlined,
   FireOutlined,
+  DeleteOutlined,
+  PlusOutlined,
 } from "@ant-design/icons";
 import Link from "next/link";
 import useSWR from "swr";
 import { getPriceColor, formatPercent, formatAmount } from "@/styles/stock-colors";
 import type { StrategyMode } from "@/lib/constants/market";
 import MarketingVisual from "@/components/marketing/MarketingVisual";
+import ResponsiveTable from "@/components/ui/ResponsiveTable";
 
 const { Title, Text, Paragraph } = Typography;
 const { Search } = Input;
@@ -173,57 +176,83 @@ function ConservativeMode({
             <Spin tip="正在扫描全市场，分析抄底信号..." size="large" />
           </div>
         ) : scanResults && scanResults.length > 0 ? (
-          <Row gutter={[12, 12]}>
-            {scanResults.map((stock: ConservativeScanResult) => {
-              const signalColor = stock.signalStrength >= 5 ? "#52c41a" : stock.signalStrength >= 3 ? "#faad14" : "#fa8c16";
-              const signalLabel = stock.signalStrength >= 5 ? "强烈关注" : stock.signalStrength >= 3 ? "值得关注" : "轻度关注";
-              return (
-                <Col xs={24} sm={12} key={stock.code}>
-                  <Link href={`/stocks/${stock.code}?market=${stock.market}`}>
-                    <Card
-                      size="small"
-                      hoverable
-                      style={{ borderLeft: `4px solid ${signalColor}` }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ marginBottom: 4 }}>
-                            <Text strong style={{ fontSize: 17 }}>{stock.name}</Text>
-                            <Text type="secondary" style={{ marginLeft: 8 }}>{stock.code}</Text>
-                            {stock.industry && <Tag color="blue" style={{ marginLeft: 6 }}>{stock.industry}</Tag>}
-                          </div>
-                          <div style={{ marginBottom: 4, display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
-                            {stock.pe > 0 && <Tag style={{ fontSize: 12 }}>PE {stock.pe.toFixed(1)}</Tag>}
-                            {stock.pb > 0 && <Tag style={{ fontSize: 12 }}>PB {stock.pb.toFixed(2)}</Tag>}
-                            {stock.totalMarketCap > 0 && <Tag style={{ fontSize: 12 }}>市值 {formatAmount(stock.totalMarketCap)}</Tag>}
-                          </div>
-                          <div style={{ marginBottom: 4 }}>
-                            <Text style={{ color: getPriceColor(stock.changePercent), fontWeight: 700, fontSize: 16 }}>
-                              ¥{stock.price.toFixed(2)}
-                            </Text>
-                            <Text style={{ color: getPriceColor(stock.changePercent), marginLeft: 8 }}>
-                              {formatPercent(stock.changePercent)}
-                            </Text>
-                          </div>
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                            {stock.signals.map((signal: string, i: number) => (
-                              <Tag key={i} color="red" style={{ fontSize: 12 }}>{signal}</Tag>
-                            ))}
-                          </div>
-                        </div>
-                        <div style={{ textAlign: "right", minWidth: 80 }}>
-                          <Tag color={stock.signalStrength >= 5 ? "green" : stock.signalStrength >= 3 ? "gold" : "orange"} style={{ fontSize: 14, padding: "2px 8px" }}>
-                            {stock.signalStrength}/8
-                          </Tag>
-                          <div style={{ fontSize: 12, color: signalColor, marginTop: 4 }}>{signalLabel}</div>
-                        </div>
-                      </div>
-                    </Card>
-                  </Link>
-                </Col>
-              );
-            })}
-          </Row>
+          <ResponsiveTable
+            rowKey="code"
+            size="small"
+            dataSource={scanResults}
+            pagination={{ pageSize: 8, showSizeChanger: false }}
+            scroll={{ x: 980 }}
+            primaryKey="name"
+            actionKeys={["actions"]}
+            title={() => (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <Text type="secondary">保守筛选结果更适合表格对比信号强度、估值和市值</Text>
+                <Button type="primary" size="small" icon={<PlusOutlined />}>添加观察</Button>
+              </div>
+            )}
+            columns={[
+              {
+                title: "标的",
+                key: "name",
+                render: (_: unknown, stock: ConservativeScanResult) => (
+                  <div>
+                    <Link href={`/stocks/${stock.code}?market=${stock.market}`} style={{ fontWeight: 700 }}>
+                      {stock.name}
+                    </Link>
+                    <div style={{ color: "#8c8c8c", fontSize: 13 }}>
+                      {stock.code}{stock.industry ? ` · ${stock.industry}` : ""}
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                title: "现价",
+                dataIndex: "price",
+                width: 110,
+                align: "right",
+                render: (value: number, stock: ConservativeScanResult) => (
+                  <span style={{ color: getPriceColor(stock.changePercent), fontWeight: 700 }}>¥{value.toFixed(2)}</span>
+                ),
+              },
+              {
+                title: "涨跌幅",
+                dataIndex: "changePercent",
+                width: 110,
+                align: "right",
+                render: (value: number) => <span style={{ color: getPriceColor(value), fontWeight: 700 }}>{formatPercent(value)}</span>,
+              },
+              {
+                title: "信号强度",
+                dataIndex: "signalStrength",
+                width: 120,
+                align: "center",
+                render: (value: number) => <Tag color={value >= 5 ? "green" : value >= 3 ? "gold" : "orange"}>{value}/8</Tag>,
+              },
+              {
+                title: "触发信号",
+                dataIndex: "signals",
+                key: "signals",
+                render: (signals: string[]) => (
+                  <Space size={[4, 4]} wrap>
+                    {signals.map((signal) => <Tag key={signal} color="red">{signal}</Tag>)}
+                  </Space>
+                ),
+              },
+              {
+                title: "操作",
+                key: "actions",
+                width: 150,
+                render: (_: unknown, stock: ConservativeScanResult) => (
+                  <Space size={4}>
+                    <Link href={`/stocks/${stock.code}?market=${stock.market}`}>
+                      <Button type="link" size="small">查看详情</Button>
+                    </Link>
+                    <Button type="text" size="small" icon={<DeleteOutlined />} disabled />
+                  </Space>
+                ),
+              },
+            ]}
+          />
         ) : (
           <Empty description="当前成交额 Top50 中暂无明显抄底信号" />
         )}
@@ -330,8 +359,10 @@ function ConservativeMode({
 
       {/* Ask AI */}
       <Card style={{ marginTop: 16, textAlign: "center" }}>
-        <Link href="/chat">
-          <Button type="primary" size="large">💬 让 AI 助手用「抄底耐力王」策略帮我分析</Button>
+        <Link href="/chat" className="strategy-ask-ai">
+          <Button type="primary" size="large" className="strategy-ask-ai__btn">
+            💬 让 AI 助手用「抄底耐力王」策略帮我分析
+          </Button>
         </Link>
       </Card>
     </>
@@ -395,41 +426,80 @@ function AggressiveMode({
               showIcon
               style={{ marginBottom: 12 }}
             />
-            <Row gutter={[12, 12]}>
-              {scanResults.map((stock: AggressiveScanResult) => (
-                <Col xs={24} sm={12} key={stock.code}>
-                  <Link href={`/stocks/${stock.code}?market=${stock.market}`}>
-                    <Card size="small" hoverable style={{ borderLeft: "4px solid #fa541c" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ marginBottom: 4 }}>
-                            <Text strong style={{ fontSize: 17 }}>{stock.name}</Text>
-                            <Text type="secondary" style={{ marginLeft: 8 }}>{stock.code}</Text>
-                            {stock.industry && <Tag color="orange" style={{ marginLeft: 6 }}>{stock.industry}</Tag>}
-                          </div>
-                          <div style={{ marginBottom: 4, display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
-                            {stock.pe > 0 && <Tag style={{ fontSize: 12 }}>PE {stock.pe.toFixed(1)}</Tag>}
-                            {stock.pb > 0 && <Tag style={{ fontSize: 12 }}>PB {stock.pb.toFixed(2)}</Tag>}
-                            {stock.totalMarketCap > 0 && <Tag style={{ fontSize: 12 }}>市值 {formatAmount(stock.totalMarketCap)}</Tag>}
-                          </div>
-                          <Text style={{ color: getPriceColor(stock.changePercent), fontWeight: 700, fontSize: 16 }}>
-                            ¥{stock.price.toFixed(2)}
-                          </Text>
-                          <Text style={{ color: getPriceColor(stock.changePercent), marginLeft: 8 }}>
-                            {formatPercent(stock.changePercent)}
-                          </Text>
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          <Tag color="volcano" style={{ fontSize: 14, padding: "2px 8px" }}>
-                            换手 {stock.turnoverRate.toFixed(2)}%
-                          </Tag>
-                        </div>
+            <ResponsiveTable
+              rowKey="code"
+              size="small"
+              dataSource={scanResults}
+              pagination={{ pageSize: 8, showSizeChanger: false }}
+              scroll={{ x: 920 }}
+              primaryKey="name"
+              actionKeys={["actions"]}
+              title={() => (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Text type="secondary">动量标的用表格更适合比较换手率、价格和行业</Text>
+                  <Button type="primary" size="small" icon={<PlusOutlined />}>添加观察</Button>
+                </div>
+              )}
+              columns={[
+                {
+                  title: "标的",
+                  key: "name",
+                  render: (_: unknown, stock: AggressiveScanResult) => (
+                    <div>
+                      <Link href={`/stocks/${stock.code}?market=${stock.market}`} style={{ fontWeight: 700 }}>
+                        {stock.name}
+                      </Link>
+                      <div style={{ color: "#8c8c8c", fontSize: 13 }}>
+                        {stock.code}{stock.industry ? ` · ${stock.industry}` : ""}
                       </div>
-                    </Card>
-                  </Link>
-                </Col>
-              ))}
-            </Row>
+                    </div>
+                  ),
+                },
+                {
+                  title: "现价",
+                  dataIndex: "price",
+                  width: 110,
+                  align: "right",
+                  render: (value: number, stock: AggressiveScanResult) => (
+                    <span style={{ color: getPriceColor(stock.changePercent), fontWeight: 700 }}>¥{value.toFixed(2)}</span>
+                  ),
+                },
+                {
+                  title: "涨跌幅",
+                  dataIndex: "changePercent",
+                  width: 110,
+                  align: "right",
+                  render: (value: number) => <span style={{ color: getPriceColor(value), fontWeight: 700 }}>{formatPercent(value)}</span>,
+                },
+                {
+                  title: "换手率",
+                  dataIndex: "turnoverRate",
+                  width: 120,
+                  align: "right",
+                  render: (value: number) => <Tag color="volcano">{value.toFixed(2)}%</Tag>,
+                },
+                {
+                  title: "市值",
+                  dataIndex: "totalMarketCap",
+                  width: 140,
+                  align: "right",
+                  render: (value: number) => formatAmount(value),
+                },
+                {
+                  title: "操作",
+                  key: "actions",
+                  width: 150,
+                  render: (_: unknown, stock: AggressiveScanResult) => (
+                    <Space size={4}>
+                      <Link href={`/stocks/${stock.code}?market=${stock.market}`}>
+                        <Button type="link" size="small">查看详情</Button>
+                      </Link>
+                      <Button type="text" size="small" icon={<DeleteOutlined />} disabled />
+                    </Space>
+                  ),
+                },
+              ]}
+            />
           </>
         ) : (
           <Empty description="当前暂无符合条件的活跃标的" />
@@ -440,29 +510,52 @@ function AggressiveMode({
 
       {/* Current Hotspots */}
       <Card title="🔥 当前市场热点" style={{ marginBottom: 16 }}>
-        <Row gutter={[12, 12]}>
-          {HOTSPOT_TOPICS.map((topic) => (
-            <Col xs={12} sm={8} md={6} key={topic.keyword}>
-              <Card
-                size="small"
-                hoverable
-                style={{
-                  textAlign: "center",
-                  cursor: "pointer",
-                  borderColor: searchKeyword === topic.keyword ? "#fa541c" : undefined,
-                }}
-                onClick={() => onSearch(topic.keyword)}
-              >
-                <div style={{ fontSize: 24 }}>{topic.icon}</div>
-                <Text strong>{topic.keyword}</Text>
-                <br />
-                <Tag color={topic.heat >= 80 ? "red" : topic.heat >= 60 ? "orange" : "blue"}>
-                  热度 {topic.heat}
-                </Tag>
-              </Card>
-            </Col>
-          ))}
-        </Row>
+        <ResponsiveTable
+          rowKey="keyword"
+          size="small"
+          pagination={false}
+          scroll={{ x: 520 }}
+          dataSource={HOTSPOT_TOPICS}
+          primaryKey="keyword"
+          actionKeys={["actions"]}
+          mobilePageSize={8}
+          title={() => (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Text type="secondary">热点主题统一用表格收纳，减少大面积留白</Text>
+              <Button type="primary" size="small" icon={<PlusOutlined />}>添加热点</Button>
+            </div>
+          )}
+          columns={[
+            {
+              title: "热点",
+              key: "keyword",
+              render: (_: unknown, topic: typeof HOTSPOT_TOPICS[number]) => (
+                <Button type="link" style={{ paddingInline: 0, fontWeight: 700 }} onClick={() => onSearch(topic.keyword)}>
+                  <span style={{ marginRight: 8 }}>{topic.icon}</span>
+                  {topic.keyword}
+                </Button>
+              ),
+            },
+            {
+              title: "热度",
+              dataIndex: "heat",
+              width: 100,
+              align: "right",
+              render: (value: number) => <Tag color={value >= 80 ? "red" : value >= 60 ? "orange" : "blue"}>热度 {value}</Tag>,
+            },
+            {
+              title: "操作",
+              key: "actions",
+              width: 150,
+              render: (_: unknown, topic: typeof HOTSPOT_TOPICS[number]) => (
+                <Space size={4}>
+                  <Button size="small" type="link" onClick={() => onSearch(topic.keyword)}>查看详情</Button>
+                  <Button type="text" size="small" icon={<DeleteOutlined />} disabled />
+                </Space>
+              ),
+            },
+          ]}
+        />
       </Card>
 
       {/* Custom Search */}
@@ -494,23 +587,48 @@ function AggressiveMode({
                 showIcon
                 style={{ marginBottom: 16 }}
               />
-              <Row gutter={[12, 12]}>
-                {searchResults.slice(0, 12).map((stock: { code: string; name: string; market: number }) => (
-                  <Col xs={24} sm={12} key={stock.code}>
-                    <Link href={`/stocks/${stock.code}?market=${stock.market}`}>
-                      <Card size="small" hoverable style={{ borderLeft: "4px solid #fa541c" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <div>
-                            <Text strong style={{ fontSize: 17 }}>{stock.name}</Text>
-                            <Text type="secondary" style={{ marginLeft: 8 }}>{stock.code}</Text>
-                          </div>
-                          <ArrowRightOutlined style={{ color: "#999" }} />
-                        </div>
-                      </Card>
-                    </Link>
-                  </Col>
-                ))}
-              </Row>
+              <ResponsiveTable
+                rowKey="code"
+                size="small"
+                dataSource={searchResults.slice(0, 12)}
+                pagination={false}
+                scroll={{ x: 680 }}
+                primaryKey="name"
+                actionKeys={["actions"]}
+                title={() => (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <Text type="secondary">热点相关标的统一进入表格，方便继续加价格/换手等字段</Text>
+                    <Button type="primary" size="small" icon={<PlusOutlined />}>添加标的</Button>
+                  </div>
+                )}
+                columns={[
+                  {
+                    title: "标的",
+                    key: "name",
+                    render: (_: unknown, stock: { code: string; name: string; market: number }) => (
+                      <div>
+                        <Link href={`/stocks/${stock.code}?market=${stock.market}`} style={{ fontWeight: 700 }}>
+                          {stock.name}
+                        </Link>
+                        <div style={{ color: "#8c8c8c", fontSize: 13 }}>{stock.code}</div>
+                      </div>
+                    ),
+                  },
+                  {
+                    title: "操作",
+                    key: "actions",
+                    width: 160,
+                    render: (_: unknown, stock: { code: string; name: string; market: number }) => (
+                      <Space size={4}>
+                        <Link href={`/stocks/${stock.code}?market=${stock.market}`}>
+                          <Button type="link" size="small">查看详情</Button>
+                        </Link>
+                        <Button type="text" size="small" icon={<DeleteOutlined />} disabled />
+                      </Space>
+                    ),
+                  },
+                ]}
+              />
             </>
           ) : (
             <Empty description={`未找到与"${searchKeyword}"相关的标的`} />
@@ -520,8 +638,13 @@ function AggressiveMode({
 
       {/* Ask AI */}
       <Card style={{ marginTop: 16, textAlign: "center" }}>
-        <Link href="/chat">
-          <Button type="primary" size="large" style={{ background: "#fa541c", borderColor: "#fa541c" }}>
+        <Link href="/chat" className="strategy-ask-ai">
+          <Button
+            type="primary"
+            size="large"
+            className="strategy-ask-ai__btn"
+            style={{ background: "#fa541c", borderColor: "#fa541c" }}
+          >
             💬 让 AI 助手用「热点捕捉者」策略帮我分析
           </Button>
         </Link>
