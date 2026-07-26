@@ -2,51 +2,126 @@ import { theme as antdTheme, type ThemeConfig } from "antd";
 
 export type AppThemeMode = "tech-light" | "tech-dark";
 
-const sharedCard = {
-  paddingLG: 24,
-  headerHeight: 58,
-  borderRadiusLG: 22,
-};
+/**
+ * 双轨密度。与 globals.css 的 1024px 断点保持一致：
+ * - comfortable：移动端适老化轨道，大字号 + 48px 控件，满足触控最小尺寸
+ * - compact：桌面科技风轨道，紧凑控件 + 更小圆角
+ */
+export type AppDensity = "comfortable" | "compact";
 
-const sharedComponents: NonNullable<ThemeConfig["components"]> = {
-  Button: {
-    controlHeight: 46,
-    fontSize: 17,
+interface DensitySpec {
+  controlHeight: number;
+  fontDelta: number;      // 相对用户选定字号的偏移，桌面整体收小
+  paddingInline: number;
+  radius: number;
+  radiusLG: number;
+  cardPaddingLG: number;
+  cardHeaderHeight: number;
+  lineHeight: number;
+  segmentedHeight: number;
+  menuItemHeight: number;
+  tabsPadding: string;
+}
+
+const DENSITY: Record<AppDensity, DensitySpec> = {
+  comfortable: {
+    controlHeight: 48,
+    fontDelta: 0,
     paddingInline: 22,
-    borderRadius: 14,
-    fontWeight: 600,
+    radius: 16,
+    radiusLG: 22,
+    cardPaddingLG: 20,
+    cardHeaderHeight: 58,
+    lineHeight: 1.75,
+    segmentedHeight: 44,
+    menuItemHeight: 48,
+    tabsPadding: "14px 18px",
   },
-  Input: {
-    controlHeight: 46,
-    fontSize: 17,
-    borderRadius: 14,
-  },
-  Card: sharedCard,
-  Menu: {
-    fontSize: 15,
-    itemHeight: 46,
-  },
-  Tabs: {
-    horizontalItemPadding: "16px 20px",
-  },
-  Segmented: {
-    controlHeight: 40,
-    trackPadding: 4,
-  },
-  Table: {
-    headerBorderRadius: 14,
+  compact: {
+    controlHeight: 36,
+    fontDelta: -3,
+    paddingInline: 16,
+    radius: 12,
+    radiusLG: 16,
+    cardPaddingLG: 20,
+    cardHeaderHeight: 48,
+    lineHeight: 1.65,
+    segmentedHeight: 34,
+    menuItemHeight: 36,
+    tabsPadding: "10px 16px",
   },
 };
 
-export function getAppTheme(mode: AppThemeMode, fontSize: number): ThemeConfig {
+function buildComponents(d: DensitySpec, bodyFont: number): NonNullable<ThemeConfig["components"]> {
+  const card = {
+    paddingLG: d.cardPaddingLG,
+    headerHeight: d.cardHeaderHeight,
+    borderRadiusLG: d.radiusLG,
+  };
+
+  return {
+    Button: {
+      controlHeight: d.controlHeight,
+      fontSize: bodyFont,
+      paddingInline: d.paddingInline,
+      borderRadius: d.radius,
+      fontWeight: 600,
+    },
+    Input: {
+      controlHeight: d.controlHeight,
+      fontSize: bodyFont,
+      borderRadius: d.radius,
+    },
+    Select: {
+      controlHeight: d.controlHeight,
+      fontSize: bodyFont,
+      borderRadius: d.radius,
+    },
+    Card: card,
+    Menu: {
+      fontSize: bodyFont,
+      itemHeight: d.menuItemHeight,
+    },
+    Tabs: {
+      horizontalItemPadding: d.tabsPadding,
+    },
+    Segmented: {
+      controlHeight: d.segmentedHeight,
+      trackPadding: 4,
+    },
+    Table: {
+      headerBorderRadius: d.radius,
+      fontSize: bodyFont,
+      cellPaddingBlock: d.controlHeight >= 44 ? 14 : 10,
+      cellPaddingInline: d.controlHeight >= 44 ? 14 : 12,
+    },
+  };
+}
+
+export function getAppTheme(
+  mode: AppThemeMode,
+  fontSize: number,
+  density: AppDensity = "comfortable",
+): ThemeConfig {
+  const d = DENSITY[density];
+  // 桌面轨道整体收小 3px，但仍跟随用户的 A−/A+ 选择，适老化调节不失效。
+  const bodyFont = Math.max(12, fontSize + d.fontDelta);
+  const sharedComponents = buildComponents(d, bodyFont);
+
   const commonToken = {
-    fontSize,
+    fontSize: bodyFont,
     fontFamily: "'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif",
-    lineHeight: 1.75,
-    controlHeight: 46,
-    borderRadius: 16,
-    borderRadiusLG: 22,
+    lineHeight: d.lineHeight,
+    controlHeight: d.controlHeight,
+    borderRadius: d.radius,
+    borderRadiusLG: d.radiusLG,
     wireframe: false,
+  };
+
+  const sharedCard = {
+    paddingLG: d.cardPaddingLG,
+    headerHeight: d.cardHeaderHeight,
+    borderRadiusLG: d.radiusLG,
   };
 
   if (mode === "tech-dark") {

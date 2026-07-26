@@ -6,6 +6,8 @@ import { AntdRegistry } from "@ant-design/nextjs-registry";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { getAppTheme, type AppThemeMode } from "@/styles/theme";
 import { UserProvider } from "@/lib/hooks/useUser";
+import { AiModelConfigProvider } from "@/lib/hooks/useAiModelConfig";
+import { useIsDesktop } from "@/lib/hooks/useBreakpoint";
 
 // 这个 Provider 是前端技术栈的汇合点：
 // - AntdRegistry：解决 Ant Design 在 Next.js App Router 下的 SSR 样式收集问题
@@ -82,8 +84,21 @@ export default function AntdProvider({ children }: { children: React.ReactNode }
     setModeState((current) => (current === "tech-light" ? "tech-dark" : "tech-light"));
   }, []);
 
+  // 双轨密度：桌面收紧控件走科技风，移动端保持适老化大控件。
+  // SSR 与首帧统一按 comfortable 渲染，hydrate 后由 matchMedia 校正。
+  const isDesktop = useIsDesktop();
+  const density = isDesktop ? "compact" : "comfortable";
+
+  useEffect(() => {
+    // 同步给全局 CSS，方便个别样式按密度微调（CSS 变量本身走 media query）。
+    document.documentElement.dataset.density = density;
+  }, [density]);
+
   const fontSize = FONT_SIZES[fontIndex];
-  const theme = useMemo(() => getAppTheme(mode, fontSize), [mode, fontSize]);
+  const theme = useMemo(
+    () => getAppTheme(mode, fontSize, density),
+    [mode, fontSize, density],
+  );
 
   const fontSizeValue = useMemo(
     () => ({ fontSize, increase, decrease, reset }),
@@ -96,20 +111,22 @@ export default function AntdProvider({ children }: { children: React.ReactNode }
   );
 
   return (
-    <ThemeModeContext.Provider value={themeModeValue}>
-      <FontSizeContext.Provider value={fontSizeValue}>
-        <AntdRegistry>
-          <ConfigProvider theme={theme} locale={zhCN}>
-            {/*
-              Antd 的 message / modal / notification 依赖 <App /> 作为宿主。
-              UserProvider 放在这里，页面内所有 Client Component 都能直接拿到 currentUser。
-            */}
-            <App>
-              <UserProvider>{children}</UserProvider>
-            </App>
-          </ConfigProvider>
-        </AntdRegistry>
-      </FontSizeContext.Provider>
-    </ThemeModeContext.Provider>
+    <AiModelConfigProvider>
+      <ThemeModeContext.Provider value={themeModeValue}>
+        <FontSizeContext.Provider value={fontSizeValue}>
+          <AntdRegistry>
+            <ConfigProvider theme={theme} locale={zhCN}>
+              {/*
+                Antd 的 message / modal / notification 依赖 <App /> 作为宿主。
+                UserProvider 放在这里，页面内所有 Client Component 都能直接拿到 currentUser。
+              */}
+              <App>
+                <UserProvider>{children}</UserProvider>
+              </App>
+            </ConfigProvider>
+          </AntdRegistry>
+        </FontSizeContext.Provider>
+      </ThemeModeContext.Provider>
+    </AiModelConfigProvider>
   );
 }
