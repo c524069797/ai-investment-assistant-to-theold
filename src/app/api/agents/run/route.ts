@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUserId } from "@/lib/auth/session";
 import { runAgent, runAgentBatch } from "@/lib/agents/workbench";
+import { resolveServerAiModelConfig } from "@/lib/ai/model-config";
 
 function parseAgentIds(input: unknown) {
   if (Array.isArray(input)) {
@@ -31,9 +32,10 @@ export async function POST(request: NextRequest) {
     }
 
     const force = Boolean(body.force);
+    const modelConfig = resolveServerAiModelConfig(body.modelConfig);
     const data = agentIds.length === 1
-      ? await runAgent(agentIds[0], { userId, force })
-      : await runAgentBatch(agentIds, { userId, force });
+      ? await runAgent(agentIds[0], { userId, force, modelConfig })
+      : await runAgentBatch(agentIds, { userId, force, modelConfig });
 
     return NextResponse.json({ success: true, data });
   } catch (error) {

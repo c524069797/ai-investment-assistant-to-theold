@@ -32,12 +32,13 @@ function classifyPortfolioRisk(signals: WatchlistSignal[]): AgentRunResult["risk
 }
 
 function toCatalogItem(agent: AgentDefinition): AgentCatalogItem {
-  const { run: _run, ...catalog } = agent;
+  const { run, ...catalog } = agent;
+  void run;
   return catalog;
 }
 
-async function runDailyBriefingAgent({ userId, force }: AgentExecutionContext): Promise<AgentRunResult> {
-  const briefing = await buildDailyMarketBriefing(userId, force);
+async function runDailyBriefingAgent({ userId, force, modelConfig }: AgentExecutionContext): Promise<AgentRunResult> {
+  const briefing = await buildDailyMarketBriefing(userId, force, modelConfig);
 
   return {
     id: "global-market-briefing",

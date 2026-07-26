@@ -1,3 +1,5 @@
+import type { ResolvedAiModelConfig } from "@/lib/ai/model-config";
+
 interface CacheEntry<T> {
   expiresAt: number;
   data: T;
@@ -38,6 +40,6 @@ export async function getCachedOrRun<T>(
   return data;
 }
 
-export function hasModelConfig() {
-  return Boolean(process.env.OPENAI_API_KEY);
+export function hasModelConfig(config?: ResolvedAiModelConfig | null) {
+  return Boolean(config?.apiKey || process.env.OPENAI_API_KEY);
 }

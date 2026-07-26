@@ -1,3 +1,5 @@
+import type { ResolvedAiModelConfig } from "@/lib/ai/model-config";
+
 export type AgentStatus = "ready" | "running" | "completed" | "fallback" | "error";
 
 export type AgentCategory = "market" | "portfolio" | "research" | "education" | "support";
@@ -46,6 +48,7 @@ export interface AgentRunResult {
 export interface AgentExecutionContext {
   userId: string;
   force?: boolean;
+  modelConfig?: ResolvedAiModelConfig;
 }
 
 export interface AgentDefinition extends AgentCatalogItem {

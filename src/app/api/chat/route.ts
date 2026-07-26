@@ -1,12 +1,14 @@
 export const dynamic = "force-dynamic";
 
-import { investmentAgent } from "@/mastra/agents/investment-agent";
+import { createInvestmentAgent } from "@/mastra/agents/investment-agent";
 import { NextRequest, NextResponse } from "next/server";
 import { addChatMessage, ensureChatSession, updateChatSessionTitle } from "@/lib/db";
 import { sanitizeAssistantText } from "@/lib/chat/sanitize";
 import { fetchMarketIndices } from "@/lib/api/eastmoney";
 import { getSessionUserId } from "@/lib/auth/session";
 import { getChatMemoryContext, saveChatAnalysisSnapshot } from "@/lib/memory/service";
+import { buildBigVKnowledgeContext } from "@/lib/bigv/vector-search";
+import { hasUsableAiModelConfig, resolveServerAiModelConfig, type ResolvedAiModelConfig } from "@/lib/ai/model-config";
 
 // 这是 App Router 的 Route Handler。
 // 它承担的是“AI 编排层”角色：接收前端 useChat 消息 -> 注入上下文 -> 调 Mastra Agent -> 持久化会话。
@@ -66,6 +68,9 @@ function buildFriendlyChatError(error: unknown) {
   if (raw.includes("Invalid token") || raw.includes("invalid token") || raw.includes("401") || raw.includes("unauthorized")) {
     return "抱歉，AI 模型通道认证失败。系统已切换到兼容模型通道配置，请刷新页面后再试；如果仍失败，请重启本地开发服务以加载最新环境变量。";
   }
+  if (raw.includes("missing api key") || raw.includes("fallback missing api key")) {
+    return "抱歉，当前还没有可用的 AI 模型密钥。请先在右上角“设置”里填写 API Key，或补齐服务端默认模型配置。";
+  }
   if (raw.includes("model") || raw.includes("channel") || raw.includes("503") || raw.includes("upstream")) {
     return "抱歉，AI 服务当前暂时不可用，可能是模型通道繁忙或上游接口异常。您可以稍后重试，或先使用股票/自选股页面查看实时分析。";
   }
@@ -89,13 +94,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string) {
         reject(error);
       });
   });
-}
-
-function normalizeBaseUrl(url?: string) {
-  if (!url) {
-    return "https://api.siliconflow.cn/v1";
-  }
-  return url.replace(/\/$/, "");
 }
 
 function shouldInjectMarketOverview(text: string) {
@@ -128,16 +126,19 @@ async function buildMarketOverviewContext() {
 
 const FALLBACK_CHAT_SYSTEM_PROMPT = "你是一位专业、耐心、通俗易懂的中文投资助手，名字叫小智。请用简洁中文回答，避免复杂术语；如果已经拿到系统提供的实时市场数据，就直接用这些数据分析，不要再让用户补充；最后补一句‘投资有风险，入市需谨慎。’";
 
-async function requestOpenAICompatibleChat(messages: ReturnType<typeof convertMessages>) {
+async function requestOpenAICompatibleChat(
+  messages: ReturnType<typeof convertMessages>,
+  modelConfig: ResolvedAiModelConfig,
+) {
   // `ReturnType<typeof convertMessages>` 是很实用的 TS 技巧：
   // 不重复手写消息类型，而是直接复用 convertMessages 的返回值类型，避免类型漂移。
   // 默认先直接请求 OpenAI Compatible 接口，保证基础问答稳定。
   // Mastra Agent 作为增强层，不能影响用户最基本的对话可用性。
-  const apiKey = process.env.OPENAI_API_KEY;
-  const baseUrl = normalizeBaseUrl(process.env.OPENAI_BASE_URL);
+  const apiKey = modelConfig.apiKey;
+  const baseUrl = modelConfig.baseUrl;
   const models = Array.from(new Set([
-    process.env.OPENAI_MODEL,
-    process.env.OPENAI_FALLBACK_MODEL,
+    modelConfig.model,
+    modelConfig.fallbackModel,
     "Qwen/Qwen2.5-7B-Instruct",
     "Qwen/Qwen3-8B",
   ].filter(Boolean))) as string[];
@@ -186,7 +187,7 @@ export async function POST(request: NextRequest) {
 
     // 第二步：解析前端 useChat 发送来的消息体。
     const body = await request.json();
-    const { messages, sessionId } = body;
+    const { messages, sessionId, modelConfig } = body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: "messages is required" }, { status: 400 });
@@ -194,6 +195,7 @@ export async function POST(request: NextRequest) {
     if (!sessionId || typeof sessionId !== "string") {
       return NextResponse.json({ error: "sessionId is required" }, { status: 400 });
     }
+    const resolvedModelConfig = resolveServerAiModelConfig(modelConfig);
 
     // 第三步：确保会话存在，聊天记录会落到数据库中。
     const chatSession = await ensureChatSession(userId, sessionId);
@@ -245,6 +247,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    if (userContent) {
+      try {
+        const bigVContext = await buildBigVKnowledgeContext(userContent);
+        if (bigVContext) {
+          systemContexts.push(bigVContext);
+        }
+      } catch (error) {
+        console.error("[/api/chat] buildBigVKnowledgeContext failed", error);
+      }
+    }
+
     if (systemContexts.length) {
       // 最终消息序列 = 系统上下文 + 原始对话消息。
       effectiveMessages = [
@@ -258,15 +271,16 @@ export async function POST(request: NextRequest) {
     try {
       // 第六步：默认直连模型，优先保证对话稳定和响应速度。
       assistantContent = sanitizeAssistantText(
-        await withTimeout(requestOpenAICompatibleChat(effectiveMessages), 20000, "AI direct chat timeout"),
+        await withTimeout(requestOpenAICompatibleChat(effectiveMessages, resolvedModelConfig), 20000, "AI direct chat timeout"),
       ).trim();
     } catch (directError) {
       console.error("[/api/chat] direct openai-compatible request failed, try agent fallback", directError);
 
       try {
         // 第七步：直连失败时再尝试 Mastra Agent 增强层。
+        const agent = hasUsableAiModelConfig(resolvedModelConfig) ? createInvestmentAgent(resolvedModelConfig) : createInvestmentAgent();
         const result = await withTimeout(
-          investmentAgent.generate(effectiveMessages, {
+          agent.generate(effectiveMessages, {
             maxSteps: 4,
           }),
           20000,

@@ -5,6 +5,7 @@ import { Alert, Button, Card, Empty, Skeleton, Space, Tag, Typography, message }
 import { LoginOutlined, PlayCircleOutlined, ReloadOutlined, RobotOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import Link from "next/link";
 import { useUser } from "@/lib/hooks/useUser";
+import { useAiModelConfig } from "@/lib/hooks/useAiModelConfig";
 import type { AgentCatalogItem, AgentCategory, AgentRunResult } from "@/lib/agents/types";
 import MarketingVisual from "@/components/marketing/MarketingVisual";
 import ChatHandoffLink from "@/components/chat/ChatHandoffLink";
@@ -81,6 +82,7 @@ function AgentResultCard({ result }: { result: AgentRunResult }) {
 
 export default function AgentWorkbench() {
   const { currentUser, isLoading: userLoading } = useUser();
+  const { config: aiModelConfig } = useAiModelConfig();
   const [catalog, setCatalog] = useState<AgentCatalogItem[]>([]);
   const [results, setResults] = useState<Record<string, AgentRunResult>>({});
   const [loadingCatalog, setLoadingCatalog] = useState(true);
@@ -107,7 +109,7 @@ export default function AgentWorkbench() {
       const data = await fetchJson<AgentRunResult | AgentRunResult[]>("/api/agents/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentIds: ids, force }),
+        body: JSON.stringify({ agentIds: ids, force, modelConfig: aiModelConfig }),
       });
       const nextResults = Array.isArray(data) ? data : [data];
 
@@ -126,7 +128,7 @@ export default function AgentWorkbench() {
     } finally {
       setRunningIds((current) => current.filter((id) => !ids.includes(id)));
     }
-  }, [currentUser]);
+  }, [aiModelConfig, currentUser]);
 
   if (!currentUser && !userLoading) {
     return (

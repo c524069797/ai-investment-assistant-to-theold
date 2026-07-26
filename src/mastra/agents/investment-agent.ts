@@ -9,6 +9,7 @@ import { hotspotAnalyzerTool } from "../tools/hotspot-analyzer";
 import { stockAnalyzerTool } from "../tools/stock-analyzer";
 import { stockNewsTool } from "../tools/stock-news";
 import { bigVAnalysisTool } from "../tools/bigv-analysis";
+import { resolveServerAiModelConfig, type ResolvedAiModelConfig } from "@/lib/ai/model-config";
 
 // AI 层采用 Mastra Agent + Vercel AI SDK 的组合：
 // - Mastra 负责“工具编排、指令、Agent 抽象”
@@ -159,6 +160,29 @@ export const INVESTMENT_AGENT_INSTRUCTIONS = `你是一位专业的 AI 投资助
 - 当用户问到任何技术指标（如"RSI多少"、"布林线在哪"、"MACD金叉了吗"、"均线排列"），使用 stockAnalyzer 获取真实指标数据来回答
 - 使用 hotspotAnalyzer 时，强调热点轮动风险，提醒严格止盈止损
 
+## 大V观点解读专用规则
+
+当你已经拿到 bigVAnalysis 工具返回的结果后，必须按下面方式组织回答：
+1. 先说清楚这位老师最近的总态度，是偏多、偏谨慎，还是强调震荡轮动。
+2. 优先提炼“结论”而不是堆砌标题。要告诉用户老师到底在看什么、担心什么、等待什么。
+3. 把观点拆成固定几类：
+   - 指数判断
+   - 板块方向
+   - 个股或风格偏好
+   - 节奏判断（反弹、回踩、补跌、轮动、观望）
+   - 风险提醒
+4. 如果工具结果里有多篇文章，要说明观点是“延续”“强化”还是“发生变化”，不要把几篇内容机械并列。
+5. 如果出现支撑位、压力位、时间窗口、止损、低吸、追高、仓位控制等交易语言，要翻译成普通用户能理解的话。
+6. 不要只复述摘要，要做归纳；但归纳必须贴着工具结果，不能凭空发挥。
+7. 最后单独给一句“普通投资者此刻最该关注什么”。
+
+当用户明确问“某老师今天怎么看”“这位老师最近在讲什么”“帮我读懂这篇大V文章”时，优先用下面格式：
+- 老师最新结论
+- 重点方向
+- 节奏变化
+- 风险点
+- 给普通投资者的翻译
+
 ## 回答风格
 
 - 用"您"称呼用户
@@ -168,34 +192,39 @@ export const INVESTMENT_AGENT_INSTRUCTIONS = `你是一位专业的 AI 投资助
 - 如果用户问到你不确定的信息，请诚实说明
 - 解释技术指标时多用生活化比喻，如"布林线像弹性围栏"、"MACD像跑车和货车赛跑"`;
 
-function normalizeBaseUrl(url?: string) {
-  if (!url) return "https://api.siliconflow.cn/v1";
-  return url.replace(/\/$/, "");
+function buildInvestmentModel(config?: ResolvedAiModelConfig) {
+  const resolved = resolveServerAiModelConfig(config);
+  const provider = createOpenAI({
+    apiKey: resolved.apiKey,
+    baseURL: resolved.baseUrl,
+  });
+
+  return provider.chat(resolved.model);
 }
 
-export const investmentAgent = new Agent({
-  id: "investment-agent",
-  name: "investment-agent",
-  instructions: INVESTMENT_AGENT_INSTRUCTIONS,
-  model: () => {
-    // 这里没有写死某一家官方 SDK，而是用 OpenAI Compatible 协议接模型。
-    // 这样无论接 OpenAI、自建中转还是其他兼容服务，调用层都保持一致。
-    const provider = createOpenAI({
-      apiKey: process.env.OPENAI_API_KEY!,
-      baseURL: normalizeBaseUrl(process.env.OPENAI_BASE_URL),
-    });
-    return provider.chat(process.env.OPENAI_MODEL || "Qwen/Qwen2.5-7B-Instruct");
-  },
-  tools: {
-    // tools 会被 Mastra 暴露给模型，模型可按指令自动决定何时调用哪一个工具。
-    stockLookup: stockLookupTool,
-    fundLookup: fundLookupTool,
-    marketOverview: marketOverviewTool,
-    riskAssessment: riskAssessmentTool,
-    bottomFinder: bottomFinderTool,
-    hotspotAnalyzer: hotspotAnalyzerTool,
-    stockAnalyzer: stockAnalyzerTool,
-    stockNews: stockNewsTool,
-    bigVAnalysis: bigVAnalysisTool,
-  },
-});
+export function createInvestmentAgent(config?: ResolvedAiModelConfig) {
+  return new Agent({
+    id: "investment-agent",
+    name: "investment-agent",
+    instructions: INVESTMENT_AGENT_INSTRUCTIONS,
+    model: () => {
+      // 这里没有写死某一家官方 SDK，而是用 OpenAI Compatible 协议接模型。
+      // 这样无论接 OpenAI、自建中转还是其他兼容服务，调用层都保持一致。
+      return buildInvestmentModel(config);
+    },
+    tools: {
+      // tools 会被 Mastra 暴露给模型，模型可按指令自动决定何时调用哪一个工具。
+      stockLookup: stockLookupTool,
+      fundLookup: fundLookupTool,
+      marketOverview: marketOverviewTool,
+      riskAssessment: riskAssessmentTool,
+      bottomFinder: bottomFinderTool,
+      hotspotAnalyzer: hotspotAnalyzerTool,
+      stockAnalyzer: stockAnalyzerTool,
+      stockNews: stockNewsTool,
+      bigVAnalysis: bigVAnalysisTool,
+    },
+  });
+}
+
+export const investmentAgent = createInvestmentAgent();

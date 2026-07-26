@@ -4,16 +4,22 @@ import {
   type DailyMarketBriefing,
 } from "@/lib/agents/global-market-briefing";
 import { getCachedOrRun, hasModelConfig, withTimeout } from "@/lib/agents/runtime";
+import { resolveServerAiModelConfig, type ResolvedAiModelConfig } from "@/lib/ai/model-config";
 import {
-  dailyBriefingCoordinatorAgent,
-  financeNewsAnalystAgent,
-  globalMarketScoutAgent,
+  createDailyBriefingCoordinatorAgent,
+  createFinanceNewsAnalystAgent,
+  createGlobalMarketScoutAgent,
 } from "@/mastra/agents/market-briefing-agents";
 
-async function runBriefingAgents(context: string) {
-  if (!hasModelConfig()) {
+async function runBriefingAgents(context: string, modelConfig?: ResolvedAiModelConfig) {
+  const resolvedConfig = resolveServerAiModelConfig(modelConfig);
+  if (!hasModelConfig(resolvedConfig)) {
     return "";
   }
+
+  const globalMarketScoutAgent = createGlobalMarketScoutAgent(resolvedConfig);
+  const financeNewsAnalystAgent = createFinanceNewsAnalystAgent(resolvedConfig);
+  const dailyBriefingCoordinatorAgent = createDailyBriefingCoordinatorAgent(resolvedConfig);
 
   const scout = await withTimeout(
     globalMarketScoutAgent.generate([{ role: "user", content: context }], { maxSteps: 2 }),
@@ -41,9 +47,13 @@ async function runBriefingAgents(context: string) {
   return coordinator.text?.trim() ?? "";
 }
 
-export async function buildDailyMarketBriefing(userId: string, force = false): Promise<DailyMarketBriefing> {
+export async function buildDailyMarketBriefing(
+  userId: string,
+  force = false,
+  modelConfig?: ResolvedAiModelConfig,
+): Promise<DailyMarketBriefing> {
   const intelligence = await collectGlobalMarketIntelligence();
-  const cacheKey = `daily-briefing:${userId}:${intelligence.targetDate}`;
+  const cacheKey = `daily-briefing:${userId}:${intelligence.targetDate}:${modelConfig?.apiKey ? modelConfig.model : "default"}`;
 
   return getCachedOrRun(cacheKey, 10 * 60 * 1000, force, async () => {
     const context = JSON.stringify({
@@ -55,7 +65,7 @@ export async function buildDailyMarketBriefing(userId: string, force = false): P
 
     let agentText = "";
     try {
-      agentText = await runBriefingAgents(context);
+      agentText = await runBriefingAgents(context, modelConfig);
     } catch (error) {
       console.error("[daily-briefing-service] agent orchestration failed", error);
     }

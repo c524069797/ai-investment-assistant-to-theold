@@ -3,6 +3,15 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUserId } from "@/lib/auth/session";
 import { buildDailyMarketBriefing } from "@/lib/agents/daily-briefing-service";
+import { resolveServerAiModelConfig } from "@/lib/ai/model-config";
+
+async function parseRequestBody(request: NextRequest) {
+  try {
+    return await request.json();
+  } catch {
+    return {};
+  }
+}
 
 async function handle(request: NextRequest, force = false) {
   const userId = getSessionUserId(request);
@@ -10,7 +19,8 @@ async function handle(request: NextRequest, force = false) {
     return NextResponse.json({ success: false, error: "未登录" }, { status: 401 });
   }
 
-  const data = await buildDailyMarketBriefing(userId, force);
+  const body = request.method === "POST" ? await parseRequestBody(request) : {};
+  const data = await buildDailyMarketBriefing(userId, force, resolveServerAiModelConfig(body.modelConfig));
   return NextResponse.json({ success: true, data });
 }
 

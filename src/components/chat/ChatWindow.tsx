@@ -34,6 +34,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { useRouter, useSearchParams } from "next/navigation";
 import { useUser } from "@/lib/hooks/useUser";
 import { useFontSize } from "@/components/layout/AntdProvider";
+import { useAiModelConfig } from "@/lib/hooks/useAiModelConfig";
 import MarketingVisual from "@/components/marketing/MarketingVisual";
 import { consumeChatHandoff, getChatStarter } from "@/lib/chat/handoff";
 import MessageBubble from "./MessageBubble";
@@ -244,21 +245,23 @@ function ConversationPanel({
   sessionId: string;
   initialMessages: UIMessage[];
   initialPrompt?: string;
-  onConversationChange: () => void;
+  onConversationChange: (messages: UIMessage[]) => void;
   selectedTitle?: string;
   onOpenHistory?: () => void;
   isMobile: boolean;
 }) {
   const [input, setInput] = useState("");
   const [chatError, setChatError] = useState("");
+  const { config: aiModelConfig } = useAiModelConfig();
   const { fontSize, increase, decrease, reset } = useFontSize();
   const autoPromptSentRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<UIMessage[]>(initialMessages);
 
   const transport = useMemo(
     // transport 决定 useChat 如何把消息发送到后端；这里额外把 sessionId 带给服务端做会话持久化。
-    () => new TextStreamChatTransport({ api: "/api/chat", body: { sessionId } }),
-    [sessionId],
+    () => new TextStreamChatTransport({ api: "/api/chat", body: { sessionId, modelConfig: aiModelConfig } }),
+    [aiModelConfig, sessionId],
   );
 
   const { messages, sendMessage, status } = useChat({
@@ -267,7 +270,7 @@ function ConversationPanel({
     // useChat 会自动维护消息列表和流式状态；这里只补充业务侧的收尾动作。
     onFinish: () => {
       setChatError("");
-      onConversationChange();
+      onConversationChange(messagesRef.current);
     },
     onError: (error) => {
       setChatError(error instanceof Error ? error.message : "AI 助手暂时无法响应，请稍后再试。");
@@ -275,6 +278,10 @@ function ConversationPanel({
   });
 
   const isLoading = status === "submitted" || status === "streaming";
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -444,6 +451,7 @@ export default function ChatWindow() {
   const handledPromptRef = useRef("");
   const handledHandoffRef = useRef("");
   const handledStarterRef = useRef("");
+  const hasLoadedSessionsRef = useRef(false);
 
   const loadMessages = useCallback(async (sessionId: string) => {
     setLoadingMessages(true);
@@ -459,13 +467,17 @@ export default function ChatWindow() {
     }
   }, []);
 
-  const loadSessions = useCallback(async () => {
+  const loadSessions = useCallback(async (options?: { silent?: boolean }) => {
     if (!currentUser) return;
-    setLoadingSessions(true);
+    const shouldShowLoading = !options?.silent && !hasLoadedSessionsRef.current;
+    if (shouldShowLoading) {
+      setLoadingSessions(true);
+    }
 
     // 会话列表与消息列表分开加载，能让左侧历史面板更快出现。
     try {
       const data = await fetchJson<ChatSessionSummary[]>("/api/chat/sessions");
+      hasLoadedSessionsRef.current = true;
       setSessionError("");
       setSessions(data);
       if (data.length) {
@@ -477,7 +489,9 @@ export default function ChatWindow() {
       setSessionError(error instanceof Error ? error.message : "历史会话加载失败");
       throw error;
     } finally {
-      setLoadingSessions(false);
+      if (shouldShowLoading) {
+        setLoadingSessions(false);
+      }
     }
   }, [currentUser]);
 
@@ -509,8 +523,8 @@ export default function ChatWindow() {
     });
     setEditingSessionId("");
     setEditingTitle("");
-    await loadSessions();
-  }, [loadSessions]);
+    setSessions((current) => current.map((item) => (item.id === sessionId ? { ...item, title } : item)));
+  }, []);
 
   const removeSession = useCallback(async (sessionId: string) => {
     await fetchJson(`/api/chat/sessions?sessionId=${encodeURIComponent(sessionId)}`, {
@@ -524,10 +538,8 @@ export default function ChatWindow() {
     }
     if (!remaining.length) {
       await createSession();
-    } else {
-      await loadSessions();
     }
-  }, [sessions, selectedSessionId, createSession, loadSessions]);
+  }, [sessions, selectedSessionId, createSession]);
 
   useEffect(() => {
     if (!userLoading && currentUser) {
@@ -752,16 +764,53 @@ export default function ChatWindow() {
             <div className="chat-loading-panel"><Spin size="large" /></div>
           ) : (
             <ConversationPanel
-              key={selectedSessionId}
               sessionId={selectedSessionId}
               initialMessages={initialMessages}
               initialPrompt={pendingPrompt || undefined}
               selectedTitle={selectedSession?.title}
               isMobile={isMobile}
               onOpenHistory={() => setHistoryOpen(true)}
-              onConversationChange={() => {
+              onConversationChange={(latestMessages) => {
                 setPendingPrompt("");
-                loadSessions();
+                setInitialMessages(latestMessages);
+                setSessions((current) => {
+                  const latestAssistant = [...latestMessages].reverse().find((message) => message.role === "assistant");
+                  const latestUser = [...latestMessages].reverse().find((message) => message.role === "user");
+                  const previewSource = latestAssistant ?? latestUser;
+                  const preview = previewSource?.parts
+                    ?.filter((part) => part.type === "text")
+                    .map((part) => ("text" in part ? part.text : ""))
+                    .join(" ")
+                    .trim() ?? "";
+
+                  const nextUpdatedAt = new Date().toISOString();
+
+                  const nextSessions = current.map((item) => {
+                    if (item.id !== selectedSessionId) {
+                      return item;
+                    }
+
+                    const nextTitle = item.title === "新对话" && latestUser
+                      ? latestUser.parts
+                        ?.filter((part) => part.type === "text")
+                        .map((part) => ("text" in part ? part.text : ""))
+                        .join(" ")
+                        .trim()
+                        .slice(0, 20) || item.title
+                      : item.title;
+
+                    return {
+                      ...item,
+                      title: nextTitle,
+                      preview: preview || item.preview,
+                      updatedAt: nextUpdatedAt,
+                    };
+                  });
+
+                  const currentSession = nextSessions.find((item) => item.id === selectedSessionId);
+                  const others = nextSessions.filter((item) => item.id !== selectedSessionId);
+                  return currentSession ? [currentSession, ...others] : nextSessions;
+                });
               }}
             />
           )

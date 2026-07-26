@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { useAiModelConfig } from "@/lib/hooks/useAiModelConfig";
 
 // 这是典型的“客户端会话上下文”写法：
 // - 首屏仍由服务端 cookie 控制访问权限
@@ -77,6 +78,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(() => readCachedUser());
   const [isLoading, setIsLoading] = useState(() => Boolean(readCachedUser()));
   const router = useRouter();
+  const { config: aiModelConfig } = useAiModelConfig();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -122,7 +124,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     window.sessionStorage.setItem(sessionKey, "pending");
 
-    fetch("/api/agents/daily-briefing", { method: "POST" })
+    fetch("/api/agents/daily-briefing", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ modelConfig: aiModelConfig }),
+    })
       .then((res) => res.json())
       .then((json) => {
         if (json.success) {
@@ -136,7 +142,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       .catch(() => {
         window.sessionStorage.removeItem(sessionKey);
       });
-  }, [currentUser]);
+  }, [aiModelConfig, currentUser]);
 
   const logout = useCallback(async () => {
     try {
