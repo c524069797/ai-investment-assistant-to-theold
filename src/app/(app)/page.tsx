@@ -11,9 +11,10 @@ import {
   SolutionOutlined,
   StarFilled,
   StockOutlined,
+  DeleteOutlined,
   ThunderboltOutlined,
 } from "@ant-design/icons";
-import { Button, Card, Empty, Skeleton, Typography } from "antd";
+import { Button, Card, Empty, Skeleton, Table, Typography } from "antd";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
@@ -604,6 +605,107 @@ function DesktopIndexSection({ indices, loading }: { indices: MarketIndex[]; loa
 }
 
 function HotspotFlowPanel({ items, loading }: { items: AggressiveScanResult[]; loading: boolean }) {
+  const topicColumns = [
+    {
+      title: "热点方向",
+      dataIndex: "keyword",
+      key: "keyword",
+      render: (_: string, topic: typeof HOTSPOT_TOPICS[number]) => (
+        <Link href={`/stocks?keyword=${encodeURIComponent(topic.keyword)}`} style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 700 }}>
+          <span>{topic.icon}</span>
+          <span>{topic.keyword}</span>
+        </Link>
+      ),
+    },
+    {
+      title: "热度",
+      dataIndex: "heat",
+      key: "heat",
+      width: 100,
+      sorter: (a: typeof HOTSPOT_TOPICS[number], b: typeof HOTSPOT_TOPICS[number]) => a.heat - b.heat,
+      defaultSortOrder: "descend" as const,
+      render: (heat: number) => <span style={{ color: "#b42318", fontWeight: 700 }}>{heat}</span>,
+    },
+    {
+      title: "操作",
+      key: "actions",
+      width: 150,
+      render: (_: unknown, topic: typeof HOTSPOT_TOPICS[number]) => (
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link href={`/stocks?keyword=${encodeURIComponent(topic.keyword)}`}>
+            <Button type="link" size="small">查看详情</Button>
+          </Link>
+          <Button type="text" size="small" icon={<DeleteOutlined />} disabled />
+        </div>
+      ),
+    },
+  ];
+
+  const flowColumns = [
+    {
+      title: "标的",
+      key: "name",
+      render: (_: unknown, item: AggressiveScanResult) => (
+        <div>
+          <Link href={`/stocks/${item.code}?market=${item.market}`} style={{ fontWeight: 700 }}>
+            {item.name}
+          </Link>
+          <div style={{ color: "#8c8c8c", fontSize: 13, marginTop: 4 }}>
+            {item.code}{item.industry ? ` · ${item.industry}` : ""}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: "现价",
+      dataIndex: "price",
+      key: "price",
+      width: 110,
+      align: "right" as const,
+      render: (price: number, item: AggressiveScanResult) => (
+        <span style={{ color: getPriceColor(item.changePercent), fontWeight: 700 }}>{formatPrice(price)}</span>
+      ),
+    },
+    {
+      title: "涨跌幅",
+      dataIndex: "changePercent",
+      key: "changePercent",
+      width: 110,
+      align: "right" as const,
+      render: (value: number) => <span style={{ color: getPriceColor(value), fontWeight: 700 }}>{formatPercent(value)}</span>,
+    },
+    {
+      title: "换手率",
+      dataIndex: "turnoverRate",
+      key: "turnoverRate",
+      width: 110,
+      align: "right" as const,
+      render: (value: number) => `${value.toFixed(2)}%`,
+    },
+    {
+      title: "状态",
+      key: "status",
+      width: 140,
+      render: (_: unknown, item: AggressiveScanResult) => {
+        const status = getHotspotFlowStatus(item);
+        return <span className={`hotspot-flow-row__badge hotspot-flow-row__badge--${status.tone}`}>{status.label}</span>;
+      },
+    },
+    {
+      title: "操作",
+      key: "actions",
+      width: 160,
+      render: (_: unknown, item: AggressiveScanResult) => (
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link href={`/stocks/${item.code}?market=${item.market}`}>
+            <Button type="link" size="small">查看详情</Button>
+          </Link>
+          <Button type="text" size="small" icon={<DeleteOutlined />} disabled />
+        </div>
+      ),
+    },
+  ];
+
   return (
     <Card
       className="modern-dashboard-panel modern-dashboard-panel--hotspot"
@@ -620,15 +722,20 @@ function HotspotFlowPanel({ items, loading }: { items: AggressiveScanResult[]; l
             <strong>当前主线热点</strong>
             <span>优先看热度高、易形成联动的方向</span>
           </div>
-          <div className="hotspot-topic-grid">
-            {HOTSPOT_TOPICS.map((topic) => (
-              <Link key={topic.keyword} href={`/stocks?keyword=${encodeURIComponent(topic.keyword)}`} className="hotspot-topic-card">
-                <span className="hotspot-topic-card__icon">{topic.icon}</span>
-                <span className="hotspot-topic-card__name">{topic.keyword}</span>
-                <span className="hotspot-topic-card__heat">热度 {topic.heat}</span>
-              </Link>
-            ))}
-          </div>
+          <Table
+            rowKey="keyword"
+            size="small"
+            pagination={false}
+            scroll={{ x: 420 }}
+            dataSource={HOTSPOT_TOPICS}
+            columns={topicColumns}
+            title={() => (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <Text type="secondary">表格化展示，节省首屏空间</Text>
+                <Button type="primary" size="small">添加热点</Button>
+              </div>
+            )}
+          />
         </div>
 
         <div className="hotspot-flow-panel__flows">
@@ -640,31 +747,20 @@ function HotspotFlowPanel({ items, loading }: { items: AggressiveScanResult[]; l
           {loading ? (
             <Skeleton active paragraph={{ rows: 5 }} title={false} />
           ) : items.length ? (
-            <div className="hotspot-flow-list">
-              {items.slice(0, 5).map((item) => {
-                const color = getPriceColor(item.changePercent);
-                const status = getHotspotFlowStatus(item);
-
-                return (
-                  <Link key={item.code} href={`/stocks/${item.code}?market=${item.market}`} className="hotspot-flow-row">
-                    <div className="hotspot-flow-row__main">
-                      <div className="hotspot-flow-row__title-line">
-                        <strong>{item.name}</strong>
-                        <span>{item.code}</span>
-                        {item.industry ? <em>{item.industry}</em> : null}
-                      </div>
-                      <div className="hotspot-flow-row__meta">{status.hint}</div>
-                    </div>
-                    <div className="hotspot-flow-row__stats">
-                      <div className="hotspot-flow-row__price" style={{ color }}>{formatPrice(item.price)}</div>
-                      <div className="hotspot-flow-row__change" style={{ color }}>{formatPercent(item.changePercent)}</div>
-                      <div className="hotspot-flow-row__turnover">换手 {item.turnoverRate.toFixed(2)}%</div>
-                      <span className={`hotspot-flow-row__badge hotspot-flow-row__badge--${status.tone}`}>{status.label}</span>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
+            <Table
+              rowKey="code"
+              size="small"
+              pagination={false}
+              scroll={{ x: 720 }}
+              dataSource={items.slice(0, 5)}
+              columns={flowColumns}
+              title={() => (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Text type="secondary">基于高换手标的快速判断资金偏好</Text>
+                  <Button type="primary" size="small">添加标的</Button>
+                </div>
+              )}
+            />
           ) : (
             <Empty description="暂无热点资金数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
           )}

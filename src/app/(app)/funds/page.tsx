@@ -2,16 +2,16 @@
 
 import { useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Input, Typography, Row, Col, Card, Spin, Empty, Select, Button, message } from "antd";
-import { SearchOutlined, ReloadOutlined } from "@ant-design/icons";
+import { Input, Typography, Card, Spin, Empty, Select, Button, Table, Space, message } from "antd";
+import { SearchOutlined, ReloadOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import useSWR from "swr";
-import FundCard from "@/components/fund/FundCard";
 import type { FundSearchResult } from "@/types/fund";
 import { FUND_TYPES } from "@/lib/constants/market";
 import { useWatchlist } from "@/lib/hooks/useWatchlist";
 import { useUser } from "@/lib/hooks/useUser";
 import MarketingVisual from "@/components/marketing/MarketingVisual";
 import { createChatHandoffHref } from "@/lib/chat/handoff";
+import { formatPercent, getPriceColor } from "@/styles/stock-colors";
 
 const { Title, Paragraph, Text } = Typography;
 const { Search } = Input;
@@ -39,7 +39,7 @@ export default function FundsPage() {
 
   const filteredResults = searchResults?.filter(
     (f) => !typeFilter || f.type.includes(typeFilter),
-  );
+  ) ?? [];
 
   const updateParams = useCallback((patch: Record<string, string>) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -59,6 +59,103 @@ export default function FundsPage() {
   const handleRefresh = useCallback(() => {
     if (keyword) mutate();
   }, [keyword, mutate]);
+
+  const fundColumns = [
+    {
+      title: "基金",
+      key: "name",
+      render: (_: unknown, fund: FundSearchResult) => (
+        <div>
+          <Button
+            type="link"
+            style={{ paddingInline: 0, fontWeight: 700 }}
+            onClick={() => router.push(`/funds/${fund.code}`)}
+          >
+            {fund.name}
+          </Button>
+          <div style={{ color: "#8c8c8c", fontSize: 13 }}>
+            {fund.code} · {fund.type}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: "估算涨跌幅",
+      dataIndex: "changePercent",
+      key: "changePercent",
+      width: 140,
+      align: "right" as const,
+      render: (value?: number) => (
+        value === undefined
+          ? <span style={{ color: "#8c8c8c" }}>-</span>
+          : <span style={{ color: getPriceColor(value), fontWeight: 700 }}>{formatPercent(value)}</span>
+      ),
+    },
+    {
+      title: "操作",
+      key: "actions",
+      width: 250,
+      render: (_: unknown, fund: FundSearchResult) => (
+        <Space size={4} wrap>
+          <Button size="small" type="link" onClick={() => router.push(`/funds/${fund.code}`)}>
+            查看详情
+          </Button>
+          <Button
+            size="small"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              if (!currentUser) {
+                message.warning("请先登录再添加自选");
+                return;
+              }
+
+              if (isInWatchlist(fund.code, "fund")) {
+                message.info(`${fund.name} 已在自选中`);
+                return;
+              }
+
+              addItem({ code: fund.code, name: fund.name, market: 0, type: "fund" });
+              message.success(`已加入自选：${fund.name}`);
+            }}
+          >
+            添加
+          </Button>
+          <Button
+            size="small"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => {
+              if (!currentUser) {
+                message.warning("请先登录再管理自选");
+                return;
+              }
+
+              if (!isInWatchlist(fund.code, "fund")) {
+                message.info(`${fund.name} 不在自选中`);
+                return;
+              }
+
+              removeItem(fund.code, "fund");
+              message.success(`已移除 ${fund.name}`);
+            }}
+          >
+            删除
+          </Button>
+          <Button
+            size="small"
+            onClick={() => {
+              router.push(createChatHandoffHref({
+                title: `${fund.name}分析`,
+                prompt: `请用通俗方式分析基金 ${fund.name}（${fund.code}），重点说明：1）这只基金主要投什么；2）短期走势和波动如何；3）更适合一次买入、定投还是继续观察；4）有哪些主要风险；5）普通投资者现在最该关注什么。`,
+              }));
+            }}
+          >
+            AI分析
+          </Button>
+        </Space>
+      ),
+    },
+  ];
 
   return (
     <div className="page-container">
@@ -117,41 +214,21 @@ export default function FundsPage() {
         <Card title={`🔍 搜索结果：${keyword}`}>
           {isLoading ? (
             <div style={{ textAlign: "center", padding: 20 }}><Spin tip="搜索中..." /></div>
-          ) : filteredResults && filteredResults.length > 0 ? (
-            <Row gutter={[12, 12]}>
-              {filteredResults.map((fund) => (
-                <Col xs={24} sm={12} key={fund.code}>
-                  <FundCard
-                    fund={fund}
-                    linkTo={`/funds/${fund.code}`}
-                    actions={{
-                      watchlisted: isInWatchlist(fund.code, "fund"),
-                      onToggleWatchlist: () => {
-                        if (!currentUser) {
-                          message.warning("请先登录再添加自选");
-                          return;
-                        }
-
-                        if (isInWatchlist(fund.code, "fund")) {
-                          removeItem(fund.code, "fund");
-                          message.success(`已移除 ${fund.name}`);
-                          return;
-                        }
-
-                        addItem({ code: fund.code, name: fund.name, market: 0, type: "fund" });
-                        message.success(`已加入自选：${fund.name}`);
-                      },
-                      onOpenAi: () => {
-                        router.push(createChatHandoffHref({
-                          title: `${fund.name}分析`,
-                          prompt: `请用通俗方式分析基金 ${fund.name}（${fund.code}），重点说明：1）这只基金主要投什么；2）短期走势和波动如何；3）更适合一次买入、定投还是继续观察；4）有哪些主要风险；5）普通投资者现在最该关注什么。`,
-                        }));
-                      },
-                    }}
-                  />
-                </Col>
-              ))}
-            </Row>
+          ) : filteredResults.length > 0 ? (
+            <Table
+              rowKey="code"
+              size="middle"
+              dataSource={filteredResults}
+              columns={fundColumns}
+              pagination={{ pageSize: 10, showSizeChanger: false }}
+              scroll={{ x: 820 }}
+              title={() => (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Text type="secondary">表格展示更适合基金筛选、操作和后续扩列</Text>
+                  <Button type="primary" icon={<PlusOutlined />}>添加基金</Button>
+                </div>
+              )}
+            />
           ) : (
             <Empty description={`未找到与"${keyword}"相关的基金`} />
           )}

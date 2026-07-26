@@ -2,14 +2,15 @@
 
 import { useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Input, Typography, Row, Col, Card, Spin, Empty, Space, Button, Tag, message } from "antd";
-import { SearchOutlined, ReloadOutlined, FireOutlined } from "@ant-design/icons";
+import { Input, Typography, Card, Spin, Empty, Space, Button, Tag, Table, message } from "antd";
+import { SearchOutlined, ReloadOutlined, FireOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import { useStockSearch, useMarketIndices, useTopicStocks } from "@/lib/hooks/useStockData";
-import StockCard from "@/components/stock/StockCard";
 import { useWatchlist } from "@/lib/hooks/useWatchlist";
 import { useUser } from "@/lib/hooks/useUser";
 import { getTonghuashunIndexUrl } from "@/lib/utils/stock-links";
 import MarketingVisual from "@/components/marketing/MarketingVisual";
+import { formatAmount, formatPercent, formatPrice, getPriceColor } from "@/styles/stock-colors";
+import type { MarketIndex } from "@/types/stock";
 
 // 股票页是典型的 App Router 客户端页面：
 // - useSearchParams 读取 URL 条件
@@ -53,6 +54,154 @@ export default function StocksPage() {
   const activeKeyword = keyword || topicKeyword;
   const isSearching = topicKeyword ? topicLoading : searchLoading;
   const results = topicKeyword ? topicResults : searchResults;
+  const normalizedResults = (results ?? []).map((stock) => ({
+    ...stock,
+    price: stock.price ?? 0,
+    change: stock.change ?? 0,
+    changePercent: stock.changePercent ?? 0,
+    amount: stock.amount ?? 0,
+  }));
+
+  const resultColumns = [
+    {
+      title: "股票",
+      key: "name",
+      render: (_: unknown, stock: typeof normalizedResults[number]) => (
+        <div>
+          <Button
+            type="link"
+            style={{ paddingInline: 0, fontWeight: 700 }}
+            onClick={() => router.push(`/stocks/${stock.code}?market=${stock.market}`)}
+          >
+            {stock.name}
+          </Button>
+          <div style={{ color: "#8c8c8c", fontSize: 13 }}>
+            {stock.code}{stock.type ? ` · ${stock.type}` : ""}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: "现价",
+      dataIndex: "price",
+      key: "price",
+      width: 110,
+      align: "right" as const,
+      render: (price: number, stock: typeof normalizedResults[number]) => (
+        <span style={{ color: getPriceColor(stock.changePercent), fontWeight: 700 }}>{formatPrice(price)}</span>
+      ),
+    },
+    {
+      title: "涨跌幅",
+      dataIndex: "changePercent",
+      key: "changePercent",
+      width: 120,
+      align: "right" as const,
+      render: (value: number) => <span style={{ color: getPriceColor(value), fontWeight: 700 }}>{formatPercent(value)}</span>,
+    },
+    {
+      title: "成交额",
+      dataIndex: "amount",
+      key: "amount",
+      width: 140,
+      align: "right" as const,
+      render: (value: number) => formatAmount(value),
+    },
+    {
+      title: "操作",
+      key: "actions",
+      width: 220,
+      render: (_: unknown, stock: typeof normalizedResults[number]) => (
+        <Space size={4} wrap>
+          <Button size="small" type="link" onClick={() => router.push(`/stocks/${stock.code}?market=${stock.market}`)}>
+            查看详情
+          </Button>
+          <Button
+            size="small"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              if (!currentUser) {
+                message.warning("请先登录再添加自选");
+                return;
+              }
+
+              if (isInWatchlist(stock.code, "stock")) {
+                message.info(`${stock.name} 已在自选中`);
+                return;
+              }
+
+              addItem({ code: stock.code, name: stock.name, market: stock.market, type: "stock" });
+              message.success(`已加入自选：${stock.name}`);
+            }}
+          >
+            添加
+          </Button>
+          <Button
+            size="small"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => {
+              if (!currentUser) {
+                message.warning("请先登录再管理自选");
+                return;
+              }
+
+              if (!isInWatchlist(stock.code, "stock")) {
+                message.info(`${stock.name} 不在自选中`);
+                return;
+              }
+
+              removeItem(stock.code, "stock");
+              message.success(`已移除 ${stock.name}`);
+            }}
+          >
+            删除
+          </Button>
+        </Space>
+      ),
+    },
+  ];
+
+  const indexColumns = [
+    {
+      title: "指数",
+      key: "name",
+      render: (_: unknown, idx: MarketIndex) => (
+        <div>
+          <a href={getTonghuashunIndexUrl(idx.code)} target="_blank" rel="noreferrer" style={{ fontWeight: 700 }}>
+            {idx.name}
+          </a>
+          <div style={{ color: "#8c8c8c", fontSize: 13 }}>{idx.code}</div>
+        </div>
+      ),
+    },
+    {
+      title: "点位",
+      dataIndex: "price",
+      key: "price",
+      width: 120,
+      align: "right" as const,
+      render: (value: number, idx: MarketIndex) => (
+        <span style={{ color: getPriceColor(idx.changePercent), fontWeight: 700 }}>{formatPrice(value)}</span>
+      ),
+    },
+    {
+      title: "涨跌幅",
+      dataIndex: "changePercent",
+      key: "changePercent",
+      width: 120,
+      align: "right" as const,
+      render: (value: number) => <span style={{ color: getPriceColor(value), fontWeight: 700 }}>{formatPercent(value)}</span>,
+    },
+    {
+      title: "成交额",
+      dataIndex: "amount",
+      key: "amount",
+      width: 140,
+      align: "right" as const,
+      render: (value: number) => formatAmount(value),
+    },
+  ];
 
   return (
     <div className="page-container">
@@ -124,55 +273,30 @@ export default function StocksPage() {
         >
           {isSearching ? (
             <div style={{ textAlign: "center", padding: 20 }}><Spin tip={topicKeyword ? "获取板块热门股..." : "搜索中..."} /></div>
-          ) : results && results.length > 0 ? (
-            <Row gutter={[12, 12]}>
-              {results.map((stock, index) => (
-                <Col xs={24} sm={12} key={stock.code}>
-                  <div style={{ position: "relative" }}>
-                    {topicKeyword && (
-                      <Tag
-                        color={index < 3 ? "red" : "default"}
-                        style={{ position: "absolute", top: 8, left: 8, zIndex: 1, fontSize: 13, fontWeight: 700 }}
-                      >
-                        #{index + 1}
-                      </Tag>
-                    )}
-                    <StockCard
-                      stock={{
-                        ...stock,
-                        price: stock.price ?? 0,
-                        change: stock.change ?? 0,
-                        changePercent: stock.changePercent ?? 0,
-                        volume: 0,
-                        amount: stock.amount ?? 0,
-                      }}
-                      linkTo={`/stocks/${stock.code}?market=${stock.market}`}
-                      actions={{
-                        watchlisted: isInWatchlist(stock.code, "stock"),
-                        onToggleWatchlist: () => {
-                          if (!currentUser) {
-                            message.warning("请先登录再添加自选");
-                            return;
-                          }
-
-                          if (isInWatchlist(stock.code, "stock")) {
-                            removeItem(stock.code, "stock");
-                            message.success(`已移除 ${stock.name}`);
-                            return;
-                          }
-
-                          addItem({ code: stock.code, name: stock.name, market: stock.market, type: "stock" });
-                          message.success(`已加入自选：${stock.name}`);
-                        },
-                        onOpenAi: () => {
-                          router.push(`/chat?stock=${stock.code}&name=${encodeURIComponent(stock.name)}`);
-                        },
-                      }}
-                    />
-                  </div>
-                </Col>
-              ))}
-            </Row>
+          ) : normalizedResults.length > 0 ? (
+            <Table
+              rowKey="code"
+              size="middle"
+              dataSource={normalizedResults.map((stock, index) => ({ ...stock, rank: index + 1 }))}
+              columns={[
+                ...(topicKeyword ? [{
+                  title: "排名",
+                  dataIndex: "rank",
+                  key: "rank",
+                  width: 90,
+                  render: (rank: number) => <Tag color={rank <= 3 ? "red" : "default"}>#{rank}</Tag>,
+                }] : []),
+                ...resultColumns,
+              ]}
+              pagination={{ pageSize: 10, showSizeChanger: false }}
+              scroll={{ x: 860 }}
+              title={() => (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Text type="secondary">统一表格视图，便于筛选、操作与扩展更多字段</Text>
+                  <Button type="primary" icon={<PlusOutlined />}>添加股票</Button>
+                </div>
+              )}
+            />
           ) : (
             <Empty description={`未找到与"${activeKeyword}"相关的${topicKeyword ? "板块" : "股票"}`} />
           )}
@@ -183,13 +307,14 @@ export default function StocksPage() {
         {indicesLoading ? (
           <div style={{ textAlign: "center", padding: 20 }}><Spin /></div>
         ) : indices ? (
-          <Row gutter={[12, 12]}>
-            {indices.map((idx) => (
-              <Col xs={24} sm={12} md={8} key={idx.code}>
-                <StockCard stock={idx} linkTo={getTonghuashunIndexUrl(idx.code)} />
-              </Col>
-            ))}
-          </Row>
+          <Table
+            rowKey="code"
+            size="middle"
+            dataSource={indices}
+            columns={indexColumns}
+            pagination={false}
+            scroll={{ x: 640 }}
+          />
         ) : (
           <Empty description="暂无数据" />
         )}
