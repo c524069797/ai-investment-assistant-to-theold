@@ -3607,11 +3607,10 @@ a {
     grid-column: auto;
   }
 
-  .education-stats-grid,
-  .education-highlight-grid,
-  .education-lessons-grid {
+  .education-stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  /* 课程/推荐网格的移动端列数由文件后部「新版移动查询」统一控制，这里不再定义 */
 
   .education-stat-card--wide {
     grid-column: span 2;
@@ -3665,18 +3664,28 @@ a {
   }
 
   .chat-reference-shell__title {
-    font-size: 17px !important;
+    font-size: 18px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .chat-reference-shell__eyebrow,
-  .chat-reference-shell__subtitle,
   .chat-history-panel__meta {
     font-size: 11px !important;
     line-height: 1.5;
   }
 
-  .chat-reference-shell__font-tools {
-    gap: 6px;
+  /* 页内 A-/Tt/A+ 与全局 Header 的字号调节重复，移动端整组隐藏，
+     eyebrow/描述文案同步让位——topbar 只留「历史 + 单行标题」，
+     否则 390px 下标题组只剩 67px，五个字必折行。 */
+  .chat-reference-shell__font-tools,
+  .chat-reference-shell__eyebrow,
+  .chat-reference-shell__subtitle {
+    display: none;
+  }
+
+  .chat-reference-shell__brand {
+    flex: 1 1 auto;
   }
 
   .chat-font-btn,
@@ -6379,10 +6388,16 @@ body.chat-page-active:not(.chat-page-mobile) .tech-chat-shell__composer {
     gap: 12px;
   }
 
-  .education-stats-grid,
+  .education-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  /* 课程卡与推荐卡内容多（图标+序号+标题+描述+入口），
+     适老字号下 2 列每列只剩 ~170px 字字换行；改单列保证可读。 */
   .education-highlight-grid,
   .education-lessons-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: 10px;
   }
 

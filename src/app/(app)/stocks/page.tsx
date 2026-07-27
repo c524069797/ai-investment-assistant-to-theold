@@ -2,13 +2,14 @@
 
 import { useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Input, Typography, Card, Spin, Empty, Space, Button, Tag, Table, message } from "antd";
+import { Input, Typography, Card, Spin, Empty, Space, Button, Tag, message } from "antd";
 import { SearchOutlined, ReloadOutlined, FireOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import { useStockSearch, useMarketIndices, useTopicStocks } from "@/lib/hooks/useStockData";
 import { useWatchlist } from "@/lib/hooks/useWatchlist";
 import { useUser } from "@/lib/hooks/useUser";
 import { getTonghuashunIndexUrl } from "@/lib/utils/stock-links";
 import MarketingVisual from "@/components/marketing/MarketingVisual";
+import ResponsiveTable from "@/components/ui/ResponsiveTable";
 import { formatAmount, formatPercent, formatPrice, getPriceColor } from "@/styles/stock-colors";
 import type { MarketIndex } from "@/types/stock";
 
@@ -274,10 +275,12 @@ export default function StocksPage() {
           {isSearching ? (
             <div style={{ textAlign: "center", padding: 20 }}><Spin tip={topicKeyword ? "获取板块热门股..." : "搜索中..."} /></div>
           ) : normalizedResults.length > 0 ? (
-            <Table
+            <ResponsiveTable
               rowKey="code"
               size="middle"
               dataSource={normalizedResults.map((stock, index) => ({ ...stock, rank: index + 1 }))}
+              primaryKey="name"
+              actionKeys={["actions"]}
               columns={[
                 ...(topicKeyword ? [{
                   title: "排名",
@@ -307,13 +310,15 @@ export default function StocksPage() {
         {indicesLoading ? (
           <div style={{ textAlign: "center", padding: 20 }}><Spin /></div>
         ) : indices ? (
-          <Table
+          <ResponsiveTable
             rowKey="code"
             size="middle"
             dataSource={indices}
             columns={indexColumns}
+            primaryKey="name"
             pagination={false}
             scroll={{ x: 640 }}
+            mobilePageSize={8}
           />
         ) : (
           <Empty description="暂无数据" />

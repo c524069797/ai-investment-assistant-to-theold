@@ -2,7 +2,7 @@
 
 import { useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Input, Typography, Card, Spin, Empty, Select, Button, Table, Space, message } from "antd";
+import { Input, Typography, Card, Spin, Empty, Select, Button, Space, message } from "antd";
 import { SearchOutlined, ReloadOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import useSWR from "swr";
 import type { FundSearchResult } from "@/types/fund";
@@ -10,6 +10,7 @@ import { FUND_TYPES } from "@/lib/constants/market";
 import { useWatchlist } from "@/lib/hooks/useWatchlist";
 import { useUser } from "@/lib/hooks/useUser";
 import MarketingVisual from "@/components/marketing/MarketingVisual";
+import ResponsiveTable from "@/components/ui/ResponsiveTable";
 import { createChatHandoffHref } from "@/lib/chat/handoff";
 import { formatPercent, getPriceColor } from "@/styles/stock-colors";
 
@@ -215,11 +216,13 @@ export default function FundsPage() {
           {isLoading ? (
             <div style={{ textAlign: "center", padding: 20 }}><Spin tip="搜索中..." /></div>
           ) : filteredResults.length > 0 ? (
-            <Table
+            <ResponsiveTable
               rowKey="code"
               size="middle"
               dataSource={filteredResults}
               columns={fundColumns}
+              primaryKey="name"
+              actionKeys={["actions"]}
               pagination={{ pageSize: 10, showSizeChanger: false }}
               scroll={{ x: 820 }}
               title={() => (

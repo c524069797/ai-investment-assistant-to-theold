@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
+// Waline 的 JS 走动态 import，但样式必须静态引入，否则评论区渲染成裸 HTML 表单
+import "@waline/client/style";
 
 // Waline supports guest comments; we use the public demo server for testing.
 // For production, set your own serverURL via env and pass it in.
