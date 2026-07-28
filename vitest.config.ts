@@ -13,7 +13,9 @@ export default defineConfig({
     setupFiles: ["./test/setup.ts"],
     clearMocks: true,
     restoreMocks: true,
-    exclude: ["playwright/**", "node_modules/**"],
+    // 用 **/ 前缀覆盖嵌套依赖目录（如 .opencode/node_modules、.kilocode/node_modules），
+    // 否则第三方库自带的测试会被扫进来
+    exclude: ["playwright/**", "**/node_modules/**"],
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
